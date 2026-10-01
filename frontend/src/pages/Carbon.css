@@ -1,0 +1,30 @@
+.carbon-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
+.carbon-kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px; }
+@media(max-width:900px){ .carbon-kpis{grid-template-columns:1fr 1fr} }
+.carbon-kpi-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:20px; position:relative; overflow:hidden; transition:all 0.2s; }
+.carbon-kpi-card::before { content:''; position:absolute; inset:0; background:linear-gradient(135deg,var(--accent),transparent); opacity:0.04; }
+.carbon-kpi-card:hover { transform:translateY(-2px); border-color:var(--border2); }
+.ckpi-icon { font-size:28px; margin-bottom:10px; }
+.ckpi-val { font-family:'Outfit',sans-serif; font-size:26px; font-weight:800; color:var(--accent); margin-bottom:4px; }
+.ckpi-label { font-size:12px; font-weight:700; margin-bottom:3px; }
+.ckpi-sub { font-size:11px; color:var(--text3); }
+.carbon-layout { display:grid; grid-template-columns:1fr 280px; gap:20px; }
+@media(max-width:1000px){ .carbon-layout{grid-template-columns:1fr} }
+/* MV Table */
+.mv-table { width:100%; border-collapse:collapse; font-size:12px; min-width:600px; }
+.mv-table th { font-size:10px; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px; padding:8px 8px; border-bottom:1px solid var(--border); text-align:left; white-space:nowrap; }
+.mv-table td { padding:10px 8px; border-bottom:1px solid var(--border); }
+.mv-table tr:last-child td { border-bottom:none; }
+.mv-row { animation:slideUp 0.4s both; }
+.td-save { color:var(--green); font-weight:700; }
+/* Buyer */
+.buyer-score { background:linear-gradient(135deg,rgba(56,217,169,0.1),rgba(59,158,255,0.05)); border:1px solid rgba(56,217,169,0.2); border-radius:12px; padding:14px; text-align:center; margin-top:16px; }
+.buyer-score-val { font-family:'Outfit',sans-serif; font-size:32px; font-weight:800; color:var(--green); }
+.buyer-score-label { font-size:12px; color:var(--text2); margin-top:4px; }
+/* Audit */
+.audit-row { display:flex; gap:12px; align-items:flex-start; padding:4px 0; }
+.audit-dot { width:8px; height:8px; border-radius:50%; background:var(--blue); margin-top:4px; flex-shrink:0; }
+/* EF card */
+.ef-card { text-align:center; }
+.ef-val { font-family:'Outfit',sans-serif; font-size:34px; font-weight:800; color:var(--amber); }
+.ef-val span { font-size:14px; font-weight:400; color:var(--text2); }
