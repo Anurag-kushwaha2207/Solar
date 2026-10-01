@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+pandas
+numpy
+streamlit
+python-multipart
