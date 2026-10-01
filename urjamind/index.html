@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UrjaMind – AI Energy Intelligence for Indian SMEs</title>
+  <meta name="description" content="UrjaMind helps Indian SMEs reduce energy costs by up to 25% using AI-driven disaggregation, tariff-aware scheduling, and automated carbon reporting — zero new hardware required." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #050a14;
+      --bg2: #080f1e;
+      --surface: #0d1a2e;
+      --surface2: #0f2040;
+      --border: rgba(99,179,237,0.12);
+      --border2: rgba(99,179,237,0.2);
+      --blue: #3b9eff;
+      --blue-light: #63b3ed;
+      --amber: #f6a623;
+      --green: #38d9a9;
+      --red: #ff6b6b;
+      --text: #e8f4fd;
+      --text2: #8ba7c7;
+      --text3: #4a6580;
+      --glow-blue: rgba(59,158,255,0.15);
+      --glow-amber: rgba(246,166,35,0.15);
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow-x: hidden;
+    }
+
+    /* Navbar */
+    .navbar {
+      position: fixed; top:0; left:0; right:0; z-index:100;
+      backdrop-filter: blur(20px);
+      background: rgba(5,10,20,0.85);
+      border-bottom: 1px solid var(--border);
+      transition: all 0.3s;
+    }
+    .nav-container {
+      max-width:1200px; margin:0 auto;
+      display:flex; align-items:center; justify-content:space-between;
+      padding:0 24px; height:64px;
+    }
+    .nav-logo { display:flex; align-items:center; gap:10px; text-decoration:none; }
+    .logo-icon { font-size:24px; }
+    .logo-text { font-family:'Outfit',sans-serif; font-weight:800; font-size:22px; background:linear-gradient(135deg,#3b9eff,#f6a623); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+    .nav-links { display:flex; gap:8px; }
+    .nav-link { padding:8px 14px; border-radius:8px; color:var(--text2); text-decoration:none; font-size:14px; font-weight:500; transition:all 0.2s; }
+    .nav-link:hover, .nav-link.active { color:var(--blue-light); background:rgba(59,158,255,0.1); }
+    .nav-cta { padding:10px 20px; background:linear-gradient(135deg,#3b9eff,#2563eb); border-radius:10px; color:#fff; text-decoration:none; font-size:14px; font-weight:600; transition:all 0.2s; }
+    .nav-cta:hover { transform:translateY(-1px); box-shadow:0 8px 24px rgba(59,158,255,0.4); }
+
+    /* Hero */
+    .hero {
+      min-height:100vh; display:flex; align-items:center;
+      padding:100px 24px 60px; position:relative; overflow:hidden;
+    }
+    .hero-bg { position:absolute; inset:0; pointer-events:none; }
+    .hero-orb {
+      position:absolute; border-radius:50%; filter:blur(100px); opacity:0.35;
+      animation: pulse 8s ease-in-out infinite;
+    }
+    .hero-orb-1 { width:600px; height:600px; background:radial-gradient(circle,#1d4ed8,transparent); top:-100px; left:-100px; animation-delay:0s; }
+    .hero-orb-2 { width:400px; height:400px; background:radial-gradient(circle,#f6a623,transparent); top:200px; right:100px; animation-delay:3s; }
+    .hero-orb-3 { width:300px; height:300px; background:radial-gradient(circle,#38d9a9,transparent); bottom:0; left:40%; animation-delay:5s; }
+    @keyframes pulse { 0%,100%{opacity:0.25;transform:scale(1)} 50%{opacity:0.45;transform:scale(1.1)} }
+    .hero-grid {
+      position:absolute; inset:0;
+      background-image: linear-gradient(rgba(59,158,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(59,158,255,0.04) 1px, transparent 1px);
+      background-size:50px 50px;
+    }
+    .hero-content { max-width:1200px; margin:0 auto; position:relative; z-index:1; flex:1; }
+    .hero-badge {
+      display:inline-flex; align-items:center; gap:8px;
+      background:rgba(59,158,255,0.1); border:1px solid rgba(59,158,255,0.3);
+      border-radius:100px; padding:8px 18px; font-size:13px; font-weight:500; color:var(--blue-light);
+      margin-bottom:28px;
+    }
+    .badge-dot { width:8px; height:8px; background:#38d9a9; border-radius:50%; animation:blink 2s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+    .hero-title { font-family:'Outfit',sans-serif; font-size:clamp(40px,6vw,76px); font-weight:800; line-height:1.1; margin-bottom:24px; }
+    .gradient-text { background:linear-gradient(135deg,#3b9eff,#f6a623); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+    .hero-subtitle { font-size:18px; line-height:1.7; color:var(--text2); max-width:620px; margin-bottom:40px; }
+    .hero-stats { display:flex; align-items:center; gap:32px; margin-bottom:40px; }
+    .stat-item { display:flex; flex-direction:column; gap:4px; }
+    .stat-value { font-family:'Outfit',sans-serif; font-size:28px; font-weight:700; color:var(--amber); }
+    .stat-label { font-size:13px; color:var(--text3); }
+    .stat-divider { width:1px; height:40px; background:var(--border2); }
+    .hero-actions { display:flex; gap:16px; flex-wrap:wrap; }
+    .btn-primary {
+      display:inline-flex; align-items:center; gap:8px;
+      background:linear-gradient(135deg,#3b9eff,#2563eb);
+      color:#fff; text-decoration:none; padding:14px 28px;
+      border-radius:12px; font-weight:600; font-size:16px;
+      transition:all 0.2s; box-shadow:0 4px 20px rgba(59,158,255,0.3);
+    }
+    .btn-primary:hover { transform:translateY(-2px); box-shadow:0 12px 32px rgba(59,158,255,0.5); }
+    .btn-secondary {
+      display:inline-flex; align-items:center;
+      background:rgba(255,255,255,0.06); border:1px solid var(--border2);
+      color:var(--text); text-decoration:none; padding:14px 28px;
+      border-radius:12px; font-weight:600; font-size:16px; transition:all 0.2s;
+    }
+    .btn-secondary:hover { background:rgba(255,255,255,0.1); border-color:var(--blue); }
+    .btn-outline {
+      display:inline-flex; align-items:center; gap:8px;
+      background:rgba(59,158,255,0.08); border:1px solid rgba(59,158,255,0.25);
+      color:var(--blue-light); text-decoration:none; padding:12px 22px;
+      border-radius:10px; font-weight:500; font-size:15px; transition:all 0.2s;
+    }
+    .btn-outline:hover { background:rgba(59,158,255,0.15); border-color:var(--blue); transform:translateY(-1px); }
+
+    /* Floating cards */
+    .hero-visual {
+      position:absolute; right:5%; top:50%; transform:translateY(-50%);
+      display:flex; flex-direction:column; gap:16px;
+    }
+    @media(max-width:1100px) { .hero-visual{display:none} }
+    .energy-card {
+      background:rgba(13,26,46,0.9); border:1px solid var(--border2);
+      border-radius:16px; padding:16px 20px;
+      display:flex; align-items:center; gap:14px;
+      backdrop-filter:blur(20px); min-width:260px;
+      box-shadow:0 8px 32px rgba(0,0,0,0.4);
+    }
+    .floating-card { animation: float 6s ease-in-out infinite; }
+    .card-1 { animation-delay:0s; }
+    .card-2 { animation-delay:2s; }
+    .card-3 { animation-delay:4s; }
+    @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-10px)} }
+    .card-icon { font-size:28px; }
+    .card-label { font-size:12px; color:var(--text3); margin-bottom:4px; }
+    .card-value { font-size:18px; font-weight:700; color:var(--text); }
+    .card-delta { font-size:13px; font-weight:600; }
+    .card-delta.negative { color:var(--red); }
+    .card-sub { font-size:12px; color:var(--text3); margin-top:4px; }
+    .anomaly-text { color:var(--amber); }
+    .saving-text { color:var(--green); }
+    .card-bar { height:4px; background:rgba(255,255,255,0.1); border-radius:2px; margin-top:8px; }
+    .bar-fill { height:100%; background:linear-gradient(90deg,#3b9eff,#f6a623); border-radius:2px; }
+
+    /* Sections */
+    .container { max-width:1200px; margin:0 auto; padding:0 24px; }
+    .section-label { font-size:13px; font-weight:600; color:var(--blue); text-transform:uppercase; letter-spacing:2px; margin-bottom:12px; }
+    .section-title { font-family:'Outfit',sans-serif; font-size:clamp(28px,4vw,44px); font-weight:700; line-height:1.2; margin-bottom:48px; }
+
+    /* Problem Section */
+    .problem-section { padding:100px 24px; background:linear-gradient(180deg,var(--bg) 0%,var(--bg2) 100%); }
+    .gap-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:24px; }
+    .gap-card {
+      background:var(--surface); border:1px solid var(--border); border-radius:20px;
+      padding:32px 28px; position:relative; overflow:hidden; transition:all 0.3s;
+    }
+    .gap-card::before {
+      content:''; position:absolute; top:0; left:0; right:0; height:2px;
+      background:linear-gradient(90deg,transparent,var(--blue),transparent);
+      opacity:0; transition:opacity 0.3s;
+    }
+    .gap-card:hover { transform:translateY(-4px); border-color:var(--border2); box-shadow:0 20px 40px rgba(0,0,0,0.3); }
+    .gap-card:hover::before { opacity:1; }
+    .gap-number { position:absolute; top:20px; right:24px; font-size:48px; font-weight:900; color:rgba(59,158,255,0.07); font-family:'Outfit',sans-serif; }
+    .gap-icon { font-size:36px; margin-bottom:16px; }
+    .gap-card h3 { font-size:18px; font-weight:700; margin-bottom:12px; color:var(--blue-light); }
+    .gap-card p { font-size:14px; line-height:1.7; color:var(--text2); }
+
+    /* Pipeline */
+    .pipeline-section { padding:100px 24px; }
+    .pipeline { display:flex; align-items:center; gap:0; overflow-x:auto; padding-bottom:16px; }
+    .pipeline-step {
+      flex:1; min-width:140px; background:var(--surface); border:1px solid var(--border);
+      border-radius:16px; padding:24px 16px; text-align:center; transition:all 0.3s;
+      cursor:pointer;
+    }
+    .pipeline-step:hover { background:var(--surface2); border-color:var(--blue); transform:translateY(-4px); box-shadow:0 12px 32px rgba(59,158,255,0.2); }
+    .step-icon { font-size:32px; margin-bottom:8px; }
+    .step-num { font-size:10px; font-weight:700; color:var(--blue); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; }
+    .pipeline-step h4 { font-size:14px; font-weight:700; margin-bottom:8px; }
+    .pipeline-step p { font-size:11px; color:var(--text3); line-height:1.5; }
+    .pipeline-arrow { font-size:20px; color:var(--blue); padding:0 8px; flex-shrink:0; }
+
+    /* Tier Section */
+    .tier-section { padding:100px 24px; background:var(--bg2); }
+    .tier-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:24px; }
+    .tier-card {
+      border-radius:20px; padding:36px 32px; border:1px solid var(--border); transition:all 0.3s;
+    }
+    .tier-card:hover { transform:translateY(-4px); }
+    .tier-1 { background:linear-gradient(135deg,rgba(13,26,46,0.9),rgba(15,32,64,0.7)); }
+    .tier-2 { background:linear-gradient(135deg,rgba(13,26,46,0.9),rgba(20,50,100,0.7)); border-color:rgba(59,158,255,0.3); }
+    .tier-3 { background:linear-gradient(135deg,rgba(13,26,46,0.9),rgba(30,60,80,0.7)); border-color:rgba(56,217,169,0.3); }
+    .tier-badge {
+      display:inline-block; padding:4px 14px; border-radius:100px; font-size:12px; font-weight:700;
+      margin-bottom:16px; letter-spacing:1px; text-transform:uppercase;
+      background:rgba(59,158,255,0.15); color:var(--blue-light);
+    }
+    .tier-3 .tier-badge { background:rgba(56,217,169,0.15); color:var(--green); }
+    .tier-card h3 { font-size:20px; font-weight:700; margin-bottom:20px; }
+    .tier-card ul { list-style:none; display:flex; flex-direction:column; gap:10px; margin-bottom:24px; }
+    .tier-card li { font-size:14px; color:var(--text2); }
+    .tier-confidence { font-size:13px; color:var(--text3); }
+    .tier-confidence span { font-weight:600; color:var(--blue-light); }
+    .tier-confidence span.high { color:var(--green); }
+
+    /* CTA */
+    .cta-section { padding:80px 24px; }
+    .cta-card {
+      background:linear-gradient(135deg,rgba(13,26,46,0.95),rgba(15,32,64,0.95));
+      border:1px solid rgba(59,158,255,0.25); border-radius:28px;
+      padding:60px 48px; text-align:center; position:relative; overflow:hidden;
+    }
+    .cta-orb { position:absolute; width:400px; height:400px; background:radial-gradient(circle,rgba(59,158,255,0.1),transparent); border-radius:50%; top:50%; left:50%; transform:translate(-50%,-50%); pointer-events:none; }
+    .cta-card h2 { font-family:'Outfit',sans-serif; font-size:36px; font-weight:800; margin-bottom:16px; }
+    .cta-card p { font-size:16px; color:var(--text2); margin-bottom:40px; }
+    .cta-buttons { display:flex; gap:16px; justify-content:center; flex-wrap:wrap; }
+
+    /* Footer */
+    .footer { padding:32px 24px; border-top:1px solid var(--border); text-align:center; }
+    .footer-logo { font-family:'Outfit',sans-serif; font-size:20px; font-weight:700; margin-bottom:8px; }
+    .footer p { font-size:13px; color:var(--text3); }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width:6px; height:6px; }
+    ::-webkit-scrollbar-track { background:var(--bg); }
+    ::-webkit-scrollbar-thumb { background:var(--surface2); border-radius:3px; }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="navbar" id="navbar">
+    <div class="nav-container">
+      <a href="index.html" class="nav-logo">
+        <div class="logo-icon">⚡</div>
+        <span class="logo-text">UrjaMind</span>
+      </a>
+      <div class="nav-links">
+        <a href="upload.html" class="nav-link">Data Upload</a>
+        <a href="dashboard.html" class="nav-link">Energy Dashboard</a>
+        <a href="scheduler.html" class="nav-link">Scheduler</a>
+        <a href="carbon.html" class="nav-link">Carbon Report</a>
+      </div>
+      <a href="upload.html" class="nav-cta">Get Started →</a>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="hero-bg">
+      <div class="hero-orb hero-orb-1"></div>
+      <div class="hero-orb hero-orb-2"></div>
+      <div class="hero-orb hero-orb-3"></div>
+      <div class="hero-grid"></div>
+    </div>
+    <div class="hero-content">
+      <div class="hero-badge">
+        <span class="badge-dot"></span>
+        Zero Hardware · Zero Data Scientists Required
+      </div>
+      <h1 class="hero-title">
+        Bijli bill ka <span class="gradient-text">poora jawab</span><br />
+        bina ek bhi sensor ke
+      </h1>
+      <p class="hero-subtitle">
+        UrjaMind uses AI to disaggregate your total meter reading into machine-level insights, detect waste, schedule production around cheap tariffs, and auto-generate carbon reports — using only data you already have.
+      </p>
+      <div class="hero-stats">
+        <div class="stat-item">
+          <span class="stat-value">₹1.2L+</span>
+          <span class="stat-label">Avg. annual savings/unit</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <span class="stat-value">15–25%</span>
+          <span class="stat-label">Energy cost reduction target</span>
+        </div>
+        <div class="stat-divider"></div>
+        <div class="stat-item">
+          <span class="stat-value">0</span>
+          <span class="stat-label">Hardware to install</span>
+        </div>
+      </div>
+      <div class="hero-actions">
+        <a href="upload.html" class="btn-primary">
+          <span>Start Free Demo</span>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+        </a>
+        <a href="dashboard.html" class="btn-secondary">View Live Dashboard →</a>
+      </div>
+    </div>
+    <div class="hero-visual">
+      <div class="energy-card floating-card card-1">
+        <div class="card-icon">🏭</div>
+        <div class="card-content">
+          <div class="card-label">Induction Furnace</div>
+          <div class="card-value">142 kW <span class="card-delta negative">↑8%</span></div>
+          <div class="card-bar"><div class="bar-fill" style="width:72%"></div></div>
+        </div>
+      </div>
+      <div class="energy-card floating-card card-2">
+        <div class="card-icon">⚠️</div>
+        <div class="card-content">
+          <div class="card-label">Waste Detected</div>
+          <div class="card-value anomaly-text">Idle compressor</div>
+          <div class="card-sub">11 PM – 2 AM · ₹4,200/mo</div>
+        </div>
+      </div>
+      <div class="energy-card floating-card card-3">
+        <div class="card-icon">✅</div>
+        <div class="card-content">
+          <div class="card-label">Schedule Optimised</div>
+          <div class="card-value saving-text">₹18,400 saved</div>
+          <div class="card-sub">Shift moved to off-peak ToD</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Problem Section -->
+  <section class="problem-section">
+    <div class="container">
+      <div class="section-label">The Problem</div>
+      <h2 class="section-title">4 gaps every SME plant manager faces</h2>
+      <div class="gap-grid">
+        <div class="gap-card">
+          <div class="gap-number">01</div>
+          <div class="gap-icon">👁️</div>
+          <h3>Visibility Gap</h3>
+          <p>Bijli kahan use ho rahi hai? Kaun si machine kitni kha rahi hai? Bill sirf ek total number hota hai.</p>
+        </div>
+        <div class="gap-card">
+          <div class="gap-number">02</div>
+          <div class="gap-icon">🔍</div>
+          <h3>Diagnosis Gap</h3>
+          <p>Bill kyun badha? Machine kharab ho rahi hai, shift schedule kharab hai, ya power factor gira?</p>
+        </div>
+        <div class="gap-card">
+          <div class="gap-number">03</div>
+          <div class="gap-icon">⚡</div>
+          <h3>Action Gap</h3>
+          <p>Kya karun ki bill ghate aur production bhi na ruke? Off-peak tariff ka fayda kaise loon?</p>
+        </div>
+        <div class="gap-card">
+          <div class="gap-number">04</div>
+          <div class="gap-icon">📋</div>
+          <h3>Proof Gap</h3>
+          <p>Export buyer carbon data maang raha hai, lekin GHG Protocol wali report SME ke paas nahi hai.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Solution Pipeline -->
+  <section class="pipeline-section">
+    <div class="container">
+      <div class="section-label">Our Solution</div>
+      <h2 class="section-title">6-Layer AI Pipeline — Zero Sensors</h2>
+      <div class="pipeline">
+        <div class="pipeline-step" onclick="location.href='upload.html'">
+          <div class="step-icon">📥</div>
+          <div class="step-num">Layer 1</div>
+          <h4>Data Ingestion</h4>
+          <p>Bill PDF, DISCOM CSV, WhatsApp, Production Excel</p>
+        </div>
+        <div class="pipeline-arrow">→</div>
+        <div class="pipeline-step">
+          <div class="step-icon">🏗️</div>
+          <div class="step-num">Layer 2</div>
+          <h4>Digital Twin</h4>
+          <p>SimPy plant simulation for synthetic labeled data</p>
+        </div>
+        <div class="pipeline-arrow">→</div>
+        <div class="pipeline-step" onclick="location.href='dashboard.html'">
+          <div class="step-icon">🧠</div>
+          <div class="step-num">Layer 3</div>
+          <h4>NILM Engine</h4>
+          <p>Transformer/Seq2Point disaggregates total load per machine</p>
+        </div>
+        <div class="pipeline-arrow">→</div>
+        <div class="pipeline-step" onclick="location.href='dashboard.html'">
+          <div class="step-icon">🔴</div>
+          <div class="step-num">Layer 4</div>
+          <h4>Anomaly Detection</h4>
+          <p>LSTM-VAE detects waste, degradation, PF drop</p>
+        </div>
+        <div class="pipeline-arrow">→</div>
+        <div class="pipeline-step" onclick="location.href='scheduler.html'">
+          <div class="step-icon">📅</div>
+          <div class="step-num">Layer 5</div>
+          <h4>Scheduler</h4>
+          <p>CP-SAT + PPO RL optimises shifts for ToD tariff savings</p>
+        </div>
+        <div class="pipeline-arrow">→</div>
+        <div class="pipeline-step" onclick="location.href='carbon.html'">
+          <div class="step-icon">🌿</div>
+          <div class="step-num">Layer 6</div>
+          <h4>Carbon + Copilot</h4>
+          <p>GHG Protocol Scope 1 &amp; 2 + Hindi/Hinglish LLM copilot</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Data Tier -->
+  <section class="tier-section">
+    <div class="container">
+      <div class="section-label">Adaptive Design</div>
+      <h2 class="section-title">Works with what you already have</h2>
+      <div class="tier-grid">
+        <div class="tier-card tier-1">
+          <div class="tier-badge">Tier 1</div>
+          <h3>Monthly Bill Only</h3>
+          <ul>
+            <li>✓ Specific Energy (kWh/unit)</li>
+            <li>✓ Power Factor analysis</li>
+            <li>✓ MD penalty detection</li>
+            <li>✓ Baseline comparison</li>
+          </ul>
+          <div class="tier-confidence">Confidence: <span>Medium</span></div>
+        </div>
+        <div class="tier-card tier-2">
+          <div class="tier-badge">Tier 2</div>
+          <h3>15/30-min Interval Data</h3>
+          <ul>
+            <li>✓ All Tier 1 features</li>
+            <li>✓ Shift-wise disaggregation</li>
+            <li>✓ Anomaly detection</li>
+            <li>✓ ToD scheduling</li>
+          </ul>
+          <div class="tier-confidence">Confidence: <span>High</span></div>
+        </div>
+        <div class="tier-card tier-3">
+          <div class="tier-badge">Tier 3</div>
+          <h3>High-Resolution Data</h3>
+          <ul>
+            <li>✓ All Tier 2 features</li>
+            <li>✓ Machine-level NILM</li>
+            <li>✓ Predictive maintenance</li>
+            <li>✓ Full carbon audit trail</li>
+          </ul>
+          <div class="tier-confidence">Confidence: <span class="high">Very High</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta-section">
+    <div class="container">
+      <div class="cta-card">
+        <div class="cta-orb"></div>
+        <h2>Explore the Full Prototype</h2>
+        <p>4 screens covering every layer of the UrjaMind pipeline</p>
+        <div class="cta-buttons">
+          <a href="upload.html" class="btn-primary"><span>📥 Upload Data</span></a>
+          <a href="dashboard.html" class="btn-outline"><span>📊 Energy Dashboard</span></a>
+          <a href="scheduler.html" class="btn-outline"><span>📅 Scheduler</span></a>
+          <a href="carbon.html" class="btn-outline"><span>🌿 Carbon Report</span></a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-logo">⚡ UrjaMind</div>
+      <p>AI Energy Intelligence for Indian SMEs · Hackathon Submission · October 2026</p>
+    </div>
+  </footer>
+</body>
+</html>

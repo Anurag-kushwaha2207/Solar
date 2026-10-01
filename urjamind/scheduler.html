@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UrjaMind – Tariff-Aware Scheduler</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg:#050a14; --bg2:#080f1e; --surface:#0d1a2e; --surface2:#0f2040;
+      --border:rgba(99,179,237,0.12); --border2:rgba(99,179,237,0.22);
+      --blue:#3b9eff; --blue-light:#63b3ed; --amber:#f6a623;
+      --green:#38d9a9; --red:#ff6b6b; --text:#e8f4fd; --text2:#8ba7c7; --text3:#4a6580;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+    nav { position:fixed; top:0; left:0; right:0; z-index:100; backdrop-filter:blur(20px); background:rgba(5,10,20,0.9); border-bottom:1px solid var(--border); }
+    .nav-c { max-width:1400px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; padding:0 24px; height:64px; }
+    .logo-text { font-family:'Outfit',sans-serif; font-weight:800; font-size:22px; background:linear-gradient(135deg,#3b9eff,#f6a623); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+    .nav-link { padding:8px 14px; border-radius:8px; color:var(--text2); text-decoration:none; font-size:14px; font-weight:500; transition:all 0.2s; }
+    .nav-link:hover, .nav-link.active { color:var(--blue-light); background:rgba(59,158,255,0.1); }
+    .nav-logo { display:flex; align-items:center; gap:10px; text-decoration:none; }
+    .nav-links { display:flex; gap:4px; }
+
+    .page { padding:80px 24px 40px; max-width:1300px; margin:0 auto; }
+    .page-header { padding:28px 0 24px; display:flex; align-items:flex-start; justify-content:space-between; }
+    .page-header h1 { font-family:'Outfit',sans-serif; font-size:30px; font-weight:800; margin-bottom:6px; }
+    .page-header p { font-size:14px; color:var(--text2); }
+    .optimize-btn { display:inline-flex; align-items:center; gap:10px; background:linear-gradient(135deg,#3b9eff,#2563eb); color:#fff; border:none; border-radius:12px; padding:14px 28px; font-size:15px; font-weight:700; cursor:pointer; transition:all 0.3s; box-shadow:0 4px 20px rgba(59,158,255,0.3); }
+    .optimize-btn:hover { transform:translateY(-2px); box-shadow:0 12px 32px rgba(59,158,255,0.5); }
+
+    /* Saving Banner */
+    .saving-banner { background:linear-gradient(135deg,rgba(56,217,169,0.1),rgba(13,26,46,0.9)); border:1px solid rgba(56,217,169,0.25); border-radius:16px; padding:20px 28px; display:flex; align-items:center; gap:32px; margin-bottom:28px; flex-wrap:wrap; }
+    .saving-item { text-align:center; }
+    .saving-val { font-family:'Outfit',sans-serif; font-size:26px; font-weight:800; }
+    .saving-label { font-size:12px; color:var(--text2); margin-top:2px; }
+    .saving-divider { width:1px; height:40px; background:rgba(56,217,169,0.2); }
+    .saving-desc { flex:1; min-width:200px; font-size:14px; color:var(--text2); line-height:1.6; }
+
+    /* Layout */
+    .sched-layout { display:grid; grid-template-columns:1fr 320px; gap:24px; }
+    @media(max-width:1000px) { .sched-layout{grid-template-columns:1fr} }
+
+    /* Tariff Heatmap */
+    .card { background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:24px; margin-bottom:20px; }
+    .card h3 { font-size:15px; font-weight:700; margin-bottom:4px; }
+    .card p { font-size:12px; color:var(--text3); margin-bottom:20px; }
+
+    .tariff-grid { display:grid; grid-template-columns:repeat(24,1fr); gap:3px; }
+    .tariff-cell { height:36px; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; cursor:pointer; transition:transform 0.1s; position:relative; }
+    .tariff-cell:hover { transform:scaleY(1.2); z-index:1; }
+    .tariff-cell .tooltip { display:none; position:absolute; bottom:120%; left:50%; transform:translateX(-50%); background:var(--surface2); border:1px solid var(--border2); border-radius:8px; padding:6px 10px; font-size:11px; white-space:nowrap; z-index:10; }
+    .tariff-cell:hover .tooltip { display:block; }
+    .tariff-off { background:rgba(56,217,169,0.25); color:#38d9a9; }
+    .tariff-normal { background:rgba(59,158,255,0.2); color:#63b3ed; }
+    .tariff-peak { background:rgba(255,107,107,0.3); color:#ff6b6b; }
+    .tariff-hours { display:grid; grid-template-columns:repeat(24,1fr); gap:3px; margin-bottom:6px; }
+    .tariff-hour-label { font-size:8px; color:var(--text3); text-align:center; }
+    .tariff-legend { display:flex; gap:16px; margin-top:12px; }
+    .tl-item { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text2); }
+    .tl-dot { width:12px; height:12px; border-radius:3px; }
+
+    /* Gantt */
+    .gantt-container { overflow-x:auto; margin-bottom:20px; }
+    .gantt-table { width:100%; border-collapse:collapse; min-width:700px; }
+    .gantt-table th { font-size:10px; color:var(--text3); text-transform:uppercase; padding:8px 6px; border-bottom:1px solid var(--border); font-weight:600; letter-spacing:0.5px; }
+    .gantt-table td { padding:8px 4px; border-bottom:1px solid var(--border); vertical-align:middle; font-size:13px; }
+    .gantt-table tr:last-child td { border-bottom:none; }
+    .gantt-grid { position:relative; height:32px; background:rgba(255,255,255,0.02); border-radius:6px; }
+    .gantt-bar { position:absolute; height:100%; border-radius:6px; display:flex; align-items:center; padding:0 8px; font-size:11px; font-weight:600; overflow:hidden; white-space:nowrap; transition:all 0.8s ease; cursor:pointer; }
+    .gantt-bar:hover { filter:brightness(1.2); }
+    .bar-current { background:rgba(255,107,107,0.4); color:#ffb3b3; border:1px solid rgba(255,107,107,0.5); }
+    .bar-optimized { background:rgba(56,217,169,0.35); color:#a7f3e0; border:1px solid rgba(56,217,169,0.5); }
+    .bar-fixed { background:rgba(99,179,237,0.2); color:var(--blue-light); border:1px solid rgba(99,179,237,0.3); }
+    .job-name { font-size:13px; font-weight:600; min-width:120px; }
+    .job-constraint { font-size:11px; color:var(--text3); min-width:80px; }
+    .diff-badge { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:100px; font-size:11px; font-weight:700; }
+    .diff-save { background:rgba(56,217,169,0.15); color:var(--green); }
+    .diff-same { background:rgba(99,179,237,0.1); color:var(--text3); }
+
+    /* Right Panel */
+    .constraints-card { background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:20px; }
+    .constraints-card h3 { font-size:15px; font-weight:700; margin-bottom:16px; }
+    .constraint-row { display:flex; align-items:center; justify-content:space-between; padding:12px 0; border-bottom:1px solid var(--border); }
+    .constraint-row:last-child { border-bottom:none; }
+    .constraint-label { font-size:13px; color:var(--text2); }
+    .constraint-value { font-size:13px; font-weight:700; }
+    .toggle { width:42px; height:22px; background:var(--surface2); border-radius:11px; border:1px solid var(--border2); cursor:pointer; position:relative; transition:background 0.3s; }
+    .toggle.on { background:var(--blue); border-color:var(--blue); }
+    .toggle::after { content:''; position:absolute; width:16px; height:16px; background:#fff; border-radius:50%; top:2px; left:2px; transition:left 0.3s; }
+    .toggle.on::after { left:22px; }
+    .method-badge { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:20px; }
+    .m-badge { padding:4px 12px; border-radius:100px; font-size:11px; font-weight:700; border:1px solid; }
+    .m-badge.active { background:rgba(59,158,255,0.15); border-color:var(--blue); color:var(--blue-light); }
+    .m-badge.inactive { border-color:var(--border); color:var(--text3); }
+    .saving-timeline { margin-top:20px; }
+    .saving-timeline h4 { font-size:13px; font-weight:700; margin-bottom:12px; }
+
+    .export-btn { width:100%; display:flex; align-items:center; justify-content:center; gap:8px; background:rgba(56,217,169,0.1); border:1px solid rgba(56,217,169,0.3); border-radius:10px; padding:12px; color:var(--green); font-weight:700; font-size:14px; cursor:pointer; margin-top:16px; transition:all 0.2s; }
+    .export-btn:hover { background:rgba(56,217,169,0.18); transform:translateY(-1px); }
+
+    .animate-in { animation: slideIn 0.6s ease forwards; }
+    @keyframes slideIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="nav-c">
+      <a href="index.html" class="nav-logo"><span style="font-size:22px">⚡</span><span class="logo-text">UrjaMind</span></a>
+      <div class="nav-links">
+        <a href="upload.html" class="nav-link">Data Upload</a>
+        <a href="dashboard.html" class="nav-link">Energy Dashboard</a>
+        <a href="scheduler.html" class="nav-link active">Scheduler</a>
+        <a href="carbon.html" class="nav-link">Carbon Report</a>
+      </div>
+      <button class="optimize-btn" onclick="runOptimizer()" id="opt-btn">
+        <span id="opt-icon">🚀</span>
+        <span id="opt-text">Run CP-SAT + PPO Optimizer</span>
+      </button>
+    </div>
+  </nav>
+
+  <div class="page">
+    <div class="page-header">
+      <div>
+        <h1>Tariff-Aware Production Scheduler</h1>
+        <p>Production jobs ko off-peak tariff hours mein shift karo — bina throughput giraaye</p>
+      </div>
+    </div>
+
+    <div class="saving-banner" id="saving-banner">
+      <div class="saving-item">
+        <div class="saving-val" style="color:var(--green)">₹18,400</div>
+        <div class="saving-label">Estimated monthly saving</div>
+      </div>
+      <div class="saving-divider"></div>
+      <div class="saving-item">
+        <div class="saving-val" style="color:var(--blue-light)">22%</div>
+        <div class="saving-label">Cost reduction</div>
+      </div>
+      <div class="saving-divider"></div>
+      <div class="saving-item">
+        <div class="saving-val" style="color:var(--amber)">0</div>
+        <div class="saving-label">Production days lost</div>
+      </div>
+      <div class="saving-divider"></div>
+      <div class="saving-desc">
+        🤖 <strong>CP-SAT optimizer</strong> ne furnace melting ko peak hours (6–10 PM, ₹8.20/kWh) se off-peak (10 PM–6 AM, ₹4.50/kWh) mein shift kiya. Maximum demand limit 200 kVA respected.
+      </div>
+    </div>
+
+    <div class="sched-layout">
+      <div>
+        <!-- Tariff Heatmap -->
+        <div class="card">
+          <h3>⏰ ToD Tariff Heatmap — Gujarat DISCOM (Oct 2026)</h3>
+          <p>24-ghante ka tariff rate — green = sasta, red = mehanga. Production isko dekh ke schedule karo.</p>
+          <div class="tariff-hours" id="tariff-hours"></div>
+          <div class="tariff-grid" id="tariff-grid"></div>
+          <div class="tariff-legend">
+            <div class="tl-item"><div class="tl-dot" style="background:rgba(56,217,169,0.4)"></div>Off-Peak ₹4.50/kWh</div>
+            <div class="tl-item"><div class="tl-dot" style="background:rgba(59,158,255,0.4)"></div>Normal ₹6.20/kWh</div>
+            <div class="tl-item"><div class="tl-dot" style="background:rgba(255,107,107,0.5)"></div>Peak ₹8.20/kWh</div>
+          </div>
+        </div>
+
+        <!-- Gantt Chart -->
+        <div class="card">
+          <h3>📅 Production Schedule — Current vs Optimized</h3>
+          <p>Bars show job timing across 24-hour window. Green = AI-suggested optimal timing.</p>
+          <div class="gantt-container">
+            <table class="gantt-table">
+              <thead>
+                <tr>
+                  <th style="width:130px">Job / Machine</th>
+                  <th style="width:80px">Constraint</th>
+                  <th>Schedule (24h)</th>
+                  <th style="width:90px">Saving</th>
+                </tr>
+              </thead>
+              <tbody id="gantt-body">
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Cost comparison chart -->
+        <div class="card">
+          <h3>💰 Daily Energy Cost — Before vs After Optimization</h3>
+          <p>Projected savings per day of the month with optimized schedule</p>
+          <canvas id="savingChart" height="140"></canvas>
+        </div>
+      </div>
+
+      <!-- Right Panel -->
+      <div>
+        <div class="constraints-card">
+          <h3>⚙️ Optimizer Settings</h3>
+          <div class="method-badge">
+            <div class="m-badge active">CP-SAT (Exact)</div>
+            <div class="m-badge active">PPO RL</div>
+            <div class="m-badge inactive">Greedy</div>
+            <div class="m-badge inactive">DQN</div>
+          </div>
+          <div class="constraint-row">
+            <div class="constraint-label">Max Demand Limit</div>
+            <div class="constraint-value" style="color:var(--blue-light)">200 kVA</div>
+          </div>
+          <div class="constraint-row">
+            <div class="constraint-label">Respect Deadlines</div>
+            <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+          </div>
+          <div class="constraint-row">
+            <div class="constraint-label">Shift Limit</div>
+            <div class="constraint-value">8h / shift</div>
+          </div>
+          <div class="constraint-row">
+            <div class="constraint-label">Safety-Critical Jobs</div>
+            <div class="toggle on"></div>
+          </div>
+          <div class="constraint-row">
+            <div class="constraint-label">Off-Peak Priority</div>
+            <div class="toggle on" onclick="this.classList.toggle('on')"></div>
+          </div>
+          <div class="constraint-row">
+            <div class="constraint-label">MD Penalty Weight</div>
+            <div class="constraint-value" style="color:var(--amber)">High</div>
+          </div>
+          <div class="constraint-row">
+            <div class="constraint-label">Tariff Period</div>
+            <div class="constraint-value" style="color:var(--green)">ToD Active</div>
+          </div>
+
+          <div class="saving-timeline">
+            <h4>📈 Projected Monthly Impact</h4>
+            <canvas id="impactChart" height="160"></canvas>
+          </div>
+          <button class="export-btn" onclick="alert('📋 Schedule exported as Excel + PDF\n\n✅ Sent to plant manager WhatsApp\n✅ Saved to GDrive')">
+            📋 Export Schedule
+          </button>
+          <button class="export-btn" onclick="location.href='carbon.html'" style="margin-top:8px;background:rgba(167,139,250,0.1);border-color:rgba(167,139,250,0.3);color:#a78bfa">
+            🌿 View Carbon Report →
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Tariff Grid
+    const tariffData = [
+      {h:0,rate:4.5,class:'tariff-off'},{h:1,rate:4.5,class:'tariff-off'},{h:2,rate:4.5,class:'tariff-off'},
+      {h:3,rate:4.5,class:'tariff-off'},{h:4,rate:4.5,class:'tariff-off'},{h:5,rate:4.5,class:'tariff-off'},
+      {h:6,rate:6.2,class:'tariff-normal'},{h:7,rate:6.2,class:'tariff-normal'},{h:8,rate:6.2,class:'tariff-normal'},
+      {h:9,rate:6.2,class:'tariff-normal'},{h:10,rate:6.2,class:'tariff-normal'},{h:11,rate:6.2,class:'tariff-normal'},
+      {h:12,rate:6.2,class:'tariff-normal'},{h:13,rate:6.2,class:'tariff-normal'},{h:14,rate:6.2,class:'tariff-normal'},
+      {h:15,rate:6.2,class:'tariff-normal'},{h:16,rate:6.2,class:'tariff-normal'},{h:17,rate:6.2,class:'tariff-normal'},
+      {h:18,rate:8.2,class:'tariff-peak'},{h:19,rate:8.2,class:'tariff-peak'},{h:20,rate:8.2,class:'tariff-peak'},
+      {h:21,rate:8.2,class:'tariff-peak'},{h:22,rate:4.5,class:'tariff-off'},{h:23,rate:4.5,class:'tariff-off'}
+    ];
+
+    const hoursEl = document.getElementById('tariff-hours');
+    const gridEl = document.getElementById('tariff-grid');
+    tariffData.forEach(t => {
+      const lbl = document.createElement('div');
+      lbl.className = 'tariff-hour-label'; lbl.textContent = `${t.h}`;
+      hoursEl.appendChild(lbl);
+      const cell = document.createElement('div');
+      cell.className = `tariff-cell ${t.class}`;
+      cell.innerHTML = `₹${t.rate}<div class="tooltip">${t.h}:00 · ₹${t.rate}/kWh</div>`;
+      gridEl.appendChild(cell);
+    });
+
+    // Gantt Data
+    const jobs = [
+      {name:'Furnace Melt #1', constraint:'Deadline: 8AM', currentStart:0.25, currentEnd:0.37, optStart:0.41, optEnd:0.53, saving:'₹4,200', hasSaving:true, fixed:false},
+      {name:'Furnace Melt #2', constraint:'Deadline: 2PM', currentStart:0.62, currentEnd:0.74, optStart:0.42, optEnd:0.54, saving:'₹3,800', hasSaving:true, fixed:false},
+      {name:'Furnace Hold', constraint:'Safety-critical', currentStart:0.25, currentEnd:0.75, optStart:0.25, optEnd:0.75, saving:'Fixed', hasSaving:false, fixed:true},
+      {name:'Hydraulic Press', constraint:'Shift: 8AM-4PM', currentStart:0.33, currentEnd:0.66, optStart:0.33, optEnd:0.66, saving:'—', hasSaving:false, fixed:false},
+      {name:'Compressor', constraint:'Auto shutoff', currentStart:0, currentEnd:1, optStart:0.25, optEnd:0.85, saving:'₹8,400', hasSaving:true, fixed:false},
+      {name:'Fettling ×6', constraint:'Deadline: 5PM', currentStart:0.33, currentEnd:0.71, optStart:0.25, optEnd:0.62, saving:'₹2,000', hasSaving:true, fixed:false},
+    ];
+
+    let optimized = false;
+    const tbody = document.getElementById('gantt-body');
+
+    function renderGantt(opt) {
+      tbody.innerHTML = '';
+      jobs.forEach(j => {
+        const tr = document.createElement('tr');
+        const s = opt ? j.optStart : j.currentStart;
+        const e = opt ? j.optEnd : j.currentEnd;
+        const cls = j.fixed ? 'bar-fixed' : (opt ? 'bar-optimized' : 'bar-current');
+        tr.innerHTML = `
+          <td class="job-name">${j.name}</td>
+          <td class="job-constraint">${j.constraint}</td>
+          <td>
+            <div class="gantt-grid">
+              <div class="gantt-bar ${cls}" style="left:${s*100}%;width:${(e-s)*100}%">
+                ${j.name.split(' ')[0]}
+              </div>
+              <div style="position:absolute;top:0;left:${(18/24)*100}%;width:1px;height:100%;background:rgba(255,107,107,0.4)"></div>
+              <div style="position:absolute;top:0;left:${(22/24)*100}%;width:1px;height:100%;background:rgba(56,217,169,0.4)"></div>
+            </div>
+          </td>
+          <td>
+            <span class="diff-badge ${j.hasSaving ? 'diff-save' : 'diff-same'}">
+              ${opt ? (j.hasSaving ? '✅ '+j.saving : j.saving) : (j.hasSaving ? '⚠️ '+j.saving : j.saving)}
+            </span>
+          </td>`;
+        tbody.appendChild(tr);
+      });
+    }
+    renderGantt(false);
+
+    function runOptimizer() {
+      const btn = document.getElementById('opt-btn');
+      const icon = document.getElementById('opt-icon');
+      const text = document.getElementById('opt-text');
+      icon.style.animation = 'spin 1s linear infinite';
+      text.textContent = 'Optimizing...';
+      btn.disabled = true;
+      setTimeout(() => {
+        optimized = true;
+        renderGantt(true);
+        icon.style.animation = '';
+        icon.textContent = '✅';
+        text.textContent = 'Optimized!';
+        btn.disabled = false;
+        document.getElementById('saving-banner').style.animation = 'pulse 0.5s ease';
+      }, 2200);
+    }
+    document.addEventListener('keyframes',() => {});
+    const styleEl = document.createElement('style');
+    styleEl.textContent = '@keyframes spin{to{transform:rotate(360deg)}} @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.02)}}';
+    document.head.appendChild(styleEl);
+
+    // Saving Chart
+    const days = Array.from({length:30}, (_,i)=>i+1);
+    const before = days.map(() => 2800 + Math.random()*600 - 300);
+    const after = before.map(v => v * (0.72 + Math.random()*0.06));
+    new Chart(document.getElementById('savingChart'), {
+      type:'line',
+      data:{
+        labels:days.map(d=>`Oct ${d}`),
+        datasets:[
+          {label:'Current Cost',data:before,borderColor:'#ff6b6b',backgroundColor:'rgba(255,107,107,0.1)',fill:true,tension:0.4,borderWidth:2,pointRadius:2},
+          {label:'Optimized Cost',data:after,borderColor:'#38d9a9',backgroundColor:'rgba(56,217,169,0.1)',fill:true,tension:0.4,borderWidth:2,pointRadius:2}
+        ]
+      },
+      options:{
+        responsive:true,
+        plugins:{legend:{labels:{color:'#8ba7c7',font:{size:11}}}},
+        scales:{
+          x:{ticks:{color:'#4a6580',font:{size:9},maxRotation:45},grid:{color:'rgba(255,255,255,0.04)'}},
+          y:{ticks:{color:'#4a6580',font:{size:10},callback:v=>'₹'+Math.round(v)},grid:{color:'rgba(255,255,255,0.06)'},title:{display:true,text:'₹/day',color:'#4a6580'}}
+        }
+      }
+    });
+
+    // Impact Chart
+    new Chart(document.getElementById('impactChart'), {
+      type:'bar',
+      data:{
+        labels:['Tariff\nShift','Idle\nControl','PF\nFix','MD\nOpt'],
+        datasets:[{
+          data:[10200,8400,4600,3200],
+          backgroundColor:['rgba(56,217,169,0.6)','rgba(59,158,255,0.6)','rgba(246,166,35,0.6)','rgba(167,139,250,0.6)'],
+          borderRadius:6, borderSkipped:false
+        }]
+      },
+      options:{
+        responsive:true,
+        plugins:{legend:{display:false}},
+        scales:{
+          x:{ticks:{color:'#4a6580',font:{size:10}},grid:{display:false}},
+          y:{ticks:{color:'#4a6580',font:{size:9},callback:v=>'₹'+v},grid:{color:'rgba(255,255,255,0.06)'},title:{display:true,text:'₹/month',color:'#4a6580'}}
+        }
+      }
+    });
+  </script>
+</body>
+</html>

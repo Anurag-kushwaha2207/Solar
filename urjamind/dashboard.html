@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UrjaMind – Energy Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg:#050a14; --bg2:#080f1e; --surface:#0d1a2e; --surface2:#0f2040;
+      --border:rgba(99,179,237,0.12); --border2:rgba(99,179,237,0.22);
+      --blue:#3b9eff; --blue-light:#63b3ed; --amber:#f6a623;
+      --green:#38d9a9; --red:#ff6b6b; --purple:#a78bfa;
+      --text:#e8f4fd; --text2:#8ba7c7; --text3:#4a6580;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+    nav { position:fixed; top:0; left:0; right:0; z-index:100; backdrop-filter:blur(20px); background:rgba(5,10,20,0.9); border-bottom:1px solid var(--border); }
+    .nav-c { max-width:1400px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; padding:0 24px; height:64px; }
+    .logo-text { font-family:'Outfit',sans-serif; font-weight:800; font-size:22px; background:linear-gradient(135deg,#3b9eff,#f6a623); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+    .nav-link { padding:8px 14px; border-radius:8px; color:var(--text2); text-decoration:none; font-size:14px; font-weight:500; transition:all 0.2s; }
+    .nav-link:hover, .nav-link.active { color:var(--blue-light); background:rgba(59,158,255,0.1); }
+    .nav-logo { display:flex; align-items:center; gap:10px; text-decoration:none; }
+    .nav-links { display:flex; gap:4px; }
+
+    /* Layout */
+    .page { padding-top:64px; display:grid; grid-template-columns:1fr 340px; min-height:100vh; }
+    .main-content { padding:28px 24px; border-right:1px solid var(--border); overflow-y:auto; }
+    .copilot-panel { padding:20px; overflow-y:auto; max-height:calc(100vh - 64px); position:sticky; top:64px; }
+
+    /* Header bar */
+    .dash-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; }
+    .dash-title h1 { font-family:'Outfit',sans-serif; font-size:24px; font-weight:800; }
+    .dash-title p { font-size:13px; color:var(--text2); margin-top:2px; }
+    .plant-selector { background:var(--surface); border:1px solid var(--border2); border-radius:10px; padding:8px 16px; color:var(--text); font-size:14px; font-weight:600; cursor:pointer; }
+    .time-tabs { display:flex; gap:4px; background:var(--surface); border-radius:10px; padding:4px; }
+    .time-tab { padding:6px 14px; border-radius:7px; font-size:13px; font-weight:600; color:var(--text2); cursor:pointer; transition:all 0.2s; }
+    .time-tab.active { background:var(--blue); color:#fff; }
+
+    /* KPI Cards */
+    .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px; }
+    @media(max-width:900px) { .kpi-grid{grid-template-columns:1fr 1fr} .page{grid-template-columns:1fr} }
+    .kpi-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:20px 22px; position:relative; overflow:hidden; transition:all 0.3s; }
+    .kpi-card:hover { border-color:var(--border2); transform:translateY(-2px); }
+    .kpi-card::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; border-radius:2px; }
+    .kpi-card.blue::before { background:linear-gradient(90deg,#3b9eff,#63b3ed); }
+    .kpi-card.amber::before { background:linear-gradient(90deg,#f6a623,#fbbf24); }
+    .kpi-card.green::before { background:linear-gradient(90deg,#38d9a9,#34d399); }
+    .kpi-card.red::before { background:linear-gradient(90deg,#ff6b6b,#f87171); }
+    .kpi-label { font-size:12px; font-weight:600; color:var(--text3); text-transform:uppercase; letter-spacing:1px; margin-bottom:10px; }
+    .kpi-value { font-family:'Outfit',sans-serif; font-size:30px; font-weight:800; margin-bottom:4px; }
+    .kpi-sub { font-size:12px; color:var(--text2); }
+    .kpi-delta { display:inline-flex; align-items:center; gap:4px; font-size:12px; font-weight:700; padding:3px 9px; border-radius:100px; margin-top:8px; }
+    .kpi-delta.up { background:rgba(255,107,107,0.15); color:var(--red); }
+    .kpi-delta.down { background:rgba(56,217,169,0.15); color:var(--green); }
+    .kpi-delta.warn { background:rgba(246,166,35,0.15); color:var(--amber); }
+    .kpi-icon { position:absolute; right:18px; top:18px; font-size:28px; opacity:0.6; }
+
+    /* Charts */
+    .chart-row { display:grid; grid-template-columns:2fr 1fr; gap:20px; margin-bottom:24px; }
+    .chart-card { background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:24px; }
+    .chart-card h3 { font-size:15px; font-weight:700; margin-bottom:4px; }
+    .chart-card p { font-size:12px; color:var(--text3); margin-bottom:20px; }
+    .chart-legend { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px; }
+    .legend-item { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text2); }
+    .legend-dot { width:10px; height:10px; border-radius:50%; }
+    .confidence-badge { display:inline-flex; align-items:center; gap:6px; background:rgba(56,217,169,0.1); border:1px solid rgba(56,217,169,0.25); color:var(--green); border-radius:100px; padding:4px 12px; font-size:11px; font-weight:700; }
+
+    /* Anomaly Alerts */
+    .alerts-section { margin-bottom:24px; }
+    .alerts-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+    .alerts-header h3 { font-size:16px; font-weight:700; }
+    .alert-count { background:rgba(255,107,107,0.15); color:var(--red); border-radius:100px; padding:3px 12px; font-size:12px; font-weight:700; }
+    .alert-list { display:flex; flex-direction:column; gap:10px; }
+    .alert-item { display:flex; align-items:center; gap:14px; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:16px 18px; transition:all 0.2s; cursor:pointer; }
+    .alert-item:hover { border-color:var(--border2); transform:translateX(4px); }
+    .alert-item.high { border-left:3px solid var(--red); }
+    .alert-item.medium { border-left:3px solid var(--amber); }
+    .alert-item.low { border-left:3px solid var(--blue); }
+    .alert-sev { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:1px; padding:3px 9px; border-radius:100px; }
+    .alert-sev.high { background:rgba(255,107,107,0.15); color:var(--red); }
+    .alert-sev.medium { background:rgba(246,166,35,0.15); color:var(--amber); }
+    .alert-sev.low { background:rgba(59,158,255,0.12); color:var(--blue-light); }
+    .alert-icon { font-size:24px; }
+    .alert-content { flex:1; }
+    .alert-title { font-size:14px; font-weight:700; margin-bottom:3px; }
+    .alert-desc { font-size:12px; color:var(--text2); }
+    .alert-saving { margin-left:auto; text-align:right; }
+    .alert-saving-val { font-size:15px; font-weight:700; color:var(--green); }
+    .alert-saving-label { font-size:11px; color:var(--text3); }
+
+    /* Second chart row */
+    .chart-row-2 { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:24px; }
+    .machine-table { width:100%; border-collapse:collapse; margin-top:8px; }
+    .machine-table th { font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:1px; padding:8px 0; text-align:left; border-bottom:1px solid var(--border); }
+    .machine-table td { padding:10px 0; font-size:13px; border-bottom:1px solid var(--border); }
+    .machine-table tr:last-child td { border-bottom:none; }
+    .machine-bar-cell { width:80px; }
+    .mini-bar { height:6px; background:rgba(255,255,255,0.08); border-radius:3px; }
+    .mini-fill { height:100%; border-radius:3px; background:linear-gradient(90deg,#3b9eff,#63b3ed); }
+    .badge-pf { padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600; }
+    .badge-pf.ok { background:rgba(56,217,169,0.12); color:var(--green); }
+    .badge-pf.warn { background:rgba(246,166,35,0.12); color:var(--amber); }
+    .badge-pf.bad { background:rgba(255,107,107,0.12); color:var(--red); }
+
+    /* Copilot */
+    .copilot-card { background:var(--surface); border:1px solid var(--border2); border-radius:20px; overflow:hidden; height:calc(100vh - 104px); display:flex; flex-direction:column; }
+    .copilot-header { padding:18px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; background:linear-gradient(135deg,rgba(59,158,255,0.08),rgba(13,26,46,0)); }
+    .copilot-avatar { width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,#3b9eff,#2563eb); display:flex; align-items:center; justify-content:center; font-size:18px; }
+    .copilot-name { font-weight:700; font-size:15px; }
+    .copilot-status { font-size:11px; color:var(--green); }
+    .copilot-messages { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px; }
+    .msg { max-width:90%; }
+    .msg.bot { align-self:flex-start; }
+    .msg.user { align-self:flex-end; }
+    .msg-bubble { padding:12px 16px; border-radius:16px; font-size:13px; line-height:1.6; }
+    .msg.bot .msg-bubble { background:rgba(59,158,255,0.1); border:1px solid rgba(59,158,255,0.2); border-bottom-left-radius:4px; }
+    .msg.user .msg-bubble { background:linear-gradient(135deg,rgba(59,158,255,0.25),rgba(37,99,235,0.2)); border-bottom-right-radius:4px; }
+    .msg-time { font-size:10px; color:var(--text3); margin-top:4px; }
+    .msg.user .msg-time { text-align:right; }
+    .data-chip { display:inline-block; background:rgba(56,217,169,0.12); border:1px solid rgba(56,217,169,0.25); color:var(--green); border-radius:8px; padding:3px 10px; font-size:11px; font-weight:700; margin:3px 2px; }
+    .copilot-input { padding:12px 16px; border-top:1px solid var(--border); display:flex; gap:10px; }
+    .copilot-input input { flex:1; background:rgba(255,255,255,0.05); border:1px solid var(--border2); border-radius:10px; padding:10px 14px; color:var(--text); font-size:13px; outline:none; }
+    .copilot-input input:focus { border-color:var(--blue); }
+    .copilot-input button { background:var(--blue); border:none; border-radius:10px; width:40px; height:40px; color:#fff; font-size:18px; cursor:pointer; flex-shrink:0; transition:all 0.2s; }
+    .copilot-input button:hover { background:#2563eb; transform:scale(1.05); }
+    .quick-qs { padding:8px 16px; display:flex; flex-direction:column; gap:6px; }
+    .quick-q { background:rgba(59,158,255,0.08); border:1px solid var(--border); border-radius:8px; padding:8px 12px; font-size:12px; color:var(--blue-light); cursor:pointer; transition:all 0.2s; }
+    .quick-q:hover { background:rgba(59,158,255,0.15); }
+
+    ::-webkit-scrollbar { width:4px; } ::-webkit-scrollbar-track { background:transparent; } ::-webkit-scrollbar-thumb { background:var(--surface2); border-radius:2px; }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="nav-c">
+      <a href="index.html" class="nav-logo"><span style="font-size:22px">⚡</span><span class="logo-text">UrjaMind</span></a>
+      <div class="nav-links">
+        <a href="upload.html" class="nav-link">Data Upload</a>
+        <a href="dashboard.html" class="nav-link active">Energy Dashboard</a>
+        <a href="scheduler.html" class="nav-link">Scheduler</a>
+        <a href="carbon.html" class="nav-link">Carbon Report</a>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center">
+        <select class="plant-selector">
+          <option>Rajkot Foundry Unit — Oct 2026</option>
+          <option>Ludhiana Textile Mill</option>
+        </select>
+        <div class="time-tabs">
+          <div class="time-tab">Day</div>
+          <div class="time-tab active">Week</div>
+          <div class="time-tab">Month</div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="page">
+    <div class="main-content">
+      <div class="dash-header">
+        <div class="dash-title">
+          <h1>Energy Intelligence Dashboard</h1>
+          <p>Rajkot Foundry · Sep 2026 · <span class="confidence-badge">🎯 Tier 2 · Confidence: 78%</span></p>
+        </div>
+      </div>
+
+      <!-- KPIs -->
+      <div class="kpi-grid">
+        <div class="kpi-card blue">
+          <div class="kpi-icon">⚡</div>
+          <div class="kpi-label">Total Consumption</div>
+          <div class="kpi-value" style="color:var(--blue-light)">48,240</div>
+          <div class="kpi-sub">kWh this month</div>
+          <div class="kpi-delta up">↑ 9.2% vs last month</div>
+        </div>
+        <div class="kpi-card amber">
+          <div class="kpi-icon">🏭</div>
+          <div class="kpi-label">Specific Energy</div>
+          <div class="kpi-value" style="color:var(--amber)">3.84</div>
+          <div class="kpi-sub">kWh per kg casting</div>
+          <div class="kpi-delta warn">⚠ 12% above baseline</div>
+        </div>
+        <div class="kpi-card green">
+          <div class="kpi-icon">📊</div>
+          <div class="kpi-label">Power Factor</div>
+          <div class="kpi-value" style="color:var(--green)">0.87</div>
+          <div class="kpi-sub">Avg. this month</div>
+          <div class="kpi-delta down">⚠ Penalty: ₹3,200</div>
+        </div>
+        <div class="kpi-card red">
+          <div class="kpi-icon">📈</div>
+          <div class="kpi-label">Max Demand Used</div>
+          <div class="kpi-value" style="color:var(--red)">94%</div>
+          <div class="kpi-sub">of 200 kVA contract</div>
+          <div class="kpi-delta up">↑ MD penalty risk</div>
+        </div>
+      </div>
+
+      <!-- Load Profile Chart -->
+      <div class="chart-row">
+        <div class="chart-card">
+          <h3>24-Hour Load Profile — Machine Disaggregation</h3>
+          <p>AI-estimated machine-level breakdown from total meter data (NILM)</p>
+          <div class="chart-legend">
+            <div class="legend-item"><div class="legend-dot" style="background:#3b9eff"></div>Induction Furnace</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#f6a623"></div>Compressor</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#38d9a9"></div>Hydraulic Press</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div>Fettling Machines</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#fb7185"></div>Lighting & Misc</div>
+          </div>
+          <canvas id="loadChart" height="220"></canvas>
+        </div>
+        <div class="chart-card">
+          <h3>Energy Breakdown</h3>
+          <p>By machine category (estimated)</p>
+          <canvas id="donutChart" height="220"></canvas>
+        </div>
+      </div>
+
+      <!-- Anomaly Alerts -->
+      <div class="alerts-section">
+        <div class="alerts-header">
+          <h3>⚠️ Anomalies & Waste Detected</h3>
+          <span class="alert-count">4 alerts · Potential saving: ₹22,800/mo</span>
+        </div>
+        <div class="alert-list">
+          <div class="alert-item high">
+            <div class="alert-icon">🔴</div>
+            <div class="alert-content">
+              <div class="alert-title">Idle Compressor — Raat 11 PM se 3 AM</div>
+              <div class="alert-desc">Compressor chal raha hai jab koi production nahi hai. 4 kW idle draw detected consistently over 18 nights.</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
+              <span class="alert-sev high">HIGH</span>
+              <div class="alert-saving"><div class="alert-saving-val">₹8,400/mo</div><div class="alert-saving-label">Potential saving</div></div>
+            </div>
+          </div>
+          <div class="alert-item medium">
+            <div class="alert-icon">🟡</div>
+            <div class="alert-content">
+              <div class="alert-title">Furnace Holding — Peak Tariff Hours</div>
+              <div class="alert-desc">Induction furnace holds molten metal 6 PM–10 PM when ToD rate is ₹8.20/kWh. Could shift to off-peak.</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
+              <span class="alert-sev medium">MED</span>
+              <div class="alert-saving"><div class="alert-saving-val">₹10,200/mo</div><div class="alert-saving-label">Potential saving</div></div>
+            </div>
+          </div>
+          <div class="alert-item medium">
+            <div class="alert-icon">📉</div>
+            <div class="alert-content">
+              <div class="alert-title">Motor Degradation — Press #3</div>
+              <div class="alert-desc">Specific energy of hydraulic press #3 badh raha hai: 0.8 kWh/cycle se 1.1 kWh/cycle over 6 weeks. Bearing wear suspected.</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
+              <span class="alert-sev medium">MED</span>
+              <div class="alert-saving"><div class="alert-saving-val">₹2,800/mo</div><div class="alert-saving-label">Maintenance saving</div></div>
+            </div>
+          </div>
+          <div class="alert-item low">
+            <div class="alert-icon">🔵</div>
+            <div class="alert-content">
+              <div class="alert-title">Power Factor Drop — Capacitor Bank Check</div>
+              <div class="alert-desc">PF 0.87 se 0.83 last week. Capacitor bank tuning required. Penalty ₹3,200/mo avoidable.</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
+              <span class="alert-sev low">LOW</span>
+              <div class="alert-saving"><div class="alert-saving-val">₹1,400/mo</div><div class="alert-saving-label">Penalty saving</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Machine Table + Baseline -->
+      <div class="chart-row-2">
+        <div class="chart-card">
+          <h3>Machine-Level Breakdown</h3>
+          <p>AI-estimated energy consumption per equipment</p>
+          <table class="machine-table">
+            <thead><tr><th>Machine</th><th>kWh</th><th>Share</th><th>PF</th><th>Status</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>Induction Furnace (500 kg)</td>
+                <td>21,400</td>
+                <td><div class="mini-bar"><div class="mini-fill" style="width:80%;background:linear-gradient(90deg,#3b9eff,#63b3ed)"></div></div></td>
+                <td><span class="badge-pf ok">0.91</span></td>
+                <td>⚡ Normal</td>
+              </tr>
+              <tr>
+                <td>Air Compressor (75 kW)</td>
+                <td>8,900</td>
+                <td><div class="mini-bar"><div class="mini-fill" style="width:35%;background:linear-gradient(90deg,#f6a623,#fbbf24)"></div></div></td>
+                <td><span class="badge-pf warn">0.85</span></td>
+                <td>⚠️ Idle waste</td>
+              </tr>
+              <tr>
+                <td>Hydraulic Press ×3</td>
+                <td>6,200</td>
+                <td><div class="mini-bar"><div class="mini-fill" style="width:25%;background:linear-gradient(90deg,#38d9a9,#34d399)"></div></div></td>
+                <td><span class="badge-pf ok">0.89</span></td>
+                <td>🔧 Press #3 drift</td>
+              </tr>
+              <tr>
+                <td>Fettling Machines ×6</td>
+                <td>4,800</td>
+                <td><div class="mini-bar"><div class="mini-fill" style="width:20%;background:linear-gradient(90deg,#a78bfa,#7c3aed)"></div></div></td>
+                <td><span class="badge-pf warn">0.84</span></td>
+                <td>⚡ Normal</td>
+              </tr>
+              <tr>
+                <td>Lighting, HVAC, Misc</td>
+                <td>6,940</td>
+                <td><div class="mini-bar"><div class="mini-fill" style="width:28%;background:linear-gradient(90deg,#fb7185,#f43f5e)"></div></div></td>
+                <td><span class="badge-pf bad">0.78</span></td>
+                <td>⚠️ Check PF</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="chart-card">
+          <h3>Baseline vs Actual — Specific Energy</h3>
+          <p>Expected (weather+production adjusted) vs actual kWh/kg</p>
+          <canvas id="baselineChart" height="220"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Copilot Panel -->
+    <div class="copilot-panel">
+      <div class="copilot-card">
+        <div class="copilot-header">
+          <div class="copilot-avatar">🤖</div>
+          <div>
+            <div class="copilot-name">UrjaMind Copilot</div>
+            <div class="copilot-status">● Online · Hindi/Hinglish</div>
+          </div>
+        </div>
+        <div class="quick-qs">
+          <div class="quick-q" onclick="askQuestion(this)">Pichhle hafte bill kyun badha? 📈</div>
+          <div class="quick-q" onclick="askQuestion(this)">Kaun si machine sabse zyada kha rahi hai?</div>
+          <div class="quick-q" onclick="askQuestion(this)">Power factor fix karne par kitna bachega?</div>
+        </div>
+        <div class="copilot-messages" id="copilot-msgs">
+          <div class="msg bot">
+            <div class="msg-bubble">
+              Namaste! 🙏 Main aapka UrjaMind Copilot hun. Aapke Rajkot foundry ka data analyze ho gaya hai. Koi bhi sawaal pucho — Hindi ya Hinglish mein.
+              <br/><br/>
+              Is mahine <span class="data-chip">4 anomalies</span> mili hain, estimated saving: <span class="data-chip">₹22,800/mo</span>
+            </div>
+            <div class="msg-time">Just now</div>
+          </div>
+        </div>
+        <div class="copilot-input">
+          <input type="text" id="copilot-input" placeholder="Koi bhi sawaal pucho..." onkeydown="if(event.key==='Enter')sendMessage()" />
+          <button onclick="sendMessage()">➤</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Load Profile Chart
+    const hours = Array.from({length:24}, (_,i) => `${i}:00`);
+    const furnace = [0,0,0,0,0,0,60,80,100,120,130,140,135,130,120,110,130,140,145,150,60,40,20,0];
+    const compressor = [4,4,4,4,4,3,15,18,20,22,25,24,22,20,22,24,26,25,22,20,18,15,10,4];
+    const press = [0,0,0,0,0,0,10,15,20,25,22,20,18,20,22,20,18,15,12,8,5,0,0,0];
+    const fettling = [0,0,0,0,0,0,8,10,12,14,16,14,12,14,16,14,12,10,8,6,4,0,0,0];
+    const misc = [3,3,3,3,3,3,8,10,12,12,12,12,12,12,12,12,12,12,10,8,6,5,4,3];
+
+    new Chart(document.getElementById('loadChart'), {
+      type:'bar', 
+      data: {
+        labels: hours,
+        datasets: [
+          {label:'Induction Furnace',data:furnace,backgroundColor:'rgba(59,158,255,0.75)',stack:'s'},
+          {label:'Compressor',data:compressor,backgroundColor:'rgba(246,166,35,0.75)',stack:'s'},
+          {label:'Hydraulic Press',data:press,backgroundColor:'rgba(56,217,169,0.75)',stack:'s'},
+          {label:'Fettling',data:fettling,backgroundColor:'rgba(167,139,250,0.75)',stack:'s'},
+          {label:'Misc',data:misc,backgroundColor:'rgba(251,113,133,0.75)',stack:'s'},
+        ]
+      },
+      options: {
+        responsive:true, plugins:{legend:{display:false}},
+        scales:{
+          x:{ticks:{color:'#4a6580',font:{size:10}},grid:{color:'rgba(255,255,255,0.04)'}},
+          y:{ticks:{color:'#4a6580',font:{size:10}},grid:{color:'rgba(255,255,255,0.06)'},title:{display:true,text:'kW',color:'#4a6580'}}
+        }
+      }
+    });
+
+    // Donut Chart
+    new Chart(document.getElementById('donutChart'), {
+      type:'doughnut',
+      data:{
+        labels:['Induction Furnace','Compressor','Hydraulic Press','Fettling','Lighting/Misc'],
+        datasets:[{data:[44,18,13,10,14],backgroundColor:['#3b9eff','#f6a623','#38d9a9','#a78bfa','#fb7185'],borderWidth:0,hoverOffset:6}]
+      },
+      options:{
+        responsive:true,cutout:'68%',
+        plugins:{legend:{position:'bottom',labels:{color:'#8ba7c7',font:{size:11},padding:12}}}
+      }
+    });
+
+    // Baseline Chart
+    const months = ['Apr','May','Jun','Jul','Aug','Sep'];
+    const baseline = [3.42,3.45,3.40,3.48,3.44,3.42];
+    const actual =   [3.45,3.50,3.62,3.75,3.80,3.84];
+    new Chart(document.getElementById('baselineChart'), {
+      type:'line',
+      data:{
+        labels:months,
+        datasets:[
+          {label:'Baseline',data:baseline,borderColor:'#3b9eff',backgroundColor:'rgba(59,158,255,0.1)',fill:true,tension:0.4,borderWidth:2,pointRadius:4},
+          {label:'Actual',data:actual,borderColor:'#ff6b6b',backgroundColor:'rgba(255,107,107,0.06)',fill:true,tension:0.4,borderWidth:2,pointRadius:4,borderDash:[0]}
+        ]
+      },
+      options:{
+        responsive:true,
+        plugins:{legend:{labels:{color:'#8ba7c7',font:{size:11}}}},
+        scales:{
+          x:{ticks:{color:'#4a6580',font:{size:11}},grid:{color:'rgba(255,255,255,0.04)'}},
+          y:{ticks:{color:'#4a6580',font:{size:11}},grid:{color:'rgba(255,255,255,0.06)'},title:{display:true,text:'kWh/kg',color:'#4a6580'}}
+        }
+      }
+    });
+
+    // Copilot
+    const botResponses = {
+      'Pichhle hafte bill kyun badha? 📈': `Bill badhne ke 3 main reasons hain jo data mein clear dikh rahe hain:\n\n1. <span class="data-chip">+9.2% consumption</span> — Compressor idle raat mein chal raha tha (18 nights detected)\n2. <span class="data-chip">Specific energy 12% high</span> — Press #3 ka efficiency gira hai (bearing wear likely)\n3. <span class="data-chip">Peak tariff exposure</span> — Furnace holding 6–10 PM mein ho rahi thi jab rate ₹8.20/kWh hai\n\nTotal extra cost: ₹~14,000 vs last month.`,
+      'Kaun si machine sabse zyada kha rahi hai?': `Top energy consumers:\n\n1. 🏭 <span class="data-chip">Induction Furnace: 44%</span> — ₹21,400/month — normal for foundry\n2. 💨 <span class="data-chip">Compressor: 18%</span> — ₹8,900/month — <strong>yahan waste hai</strong> (idle raat mein)\n3. 🔧 <span class="data-chip">Hydraulic Press: 13%</span> — Press #3 mein degradation signal\n\nSabse zyada actionable saving compressor idle control mein hai.`,
+      'Power factor fix karne par kitna bachega?': `Abhi PF = <span class="data-chip">0.87</span> — target ≥ 0.90 for no penalty.\n\nCapacitor bank tuning se:\n• DISCOM penalty avoid: <span class="data-chip">₹3,200/month</span>\n• Reduced kVAh consumption → lower bill\n• Estimated total saving: <span class="data-chip">₹1,400–₹4,600/month</span>\n\nCapacitor bank tune karana ek electrician se — one-time cost ~₹5,000–₹15,000, payback: 2–3 months.`
+    };
+
+    function askQuestion(el) {
+      const q = el.textContent;
+      addMessage(q, 'user');
+      setTimeout(() => {
+        const resp = botResponses[q] || 'Is sawaal ka jawab dhundh raha hun... Thodi der mein batata hun.';
+        addMessage(resp, 'bot');
+      }, 800);
+    }
+
+    function sendMessage() {
+      const input = document.getElementById('copilot-input');
+      const q = input.value.trim();
+      if (!q) return;
+      addMessage(q, 'user');
+      input.value = '';
+      setTimeout(() => {
+        addMessage('Yeh sawaal analyze kar raha hun... Data verified hai, AI analysis chal rahi hai. Thode seconds mein jawab aayega. 🔍', 'bot');
+      }, 600);
+    }
+
+    function addMessage(text, role) {
+      const msgs = document.getElementById('copilot-msgs');
+      const div = document.createElement('div');
+      div.className = `msg ${role}`;
+      const now = new Date().toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit'});
+      div.innerHTML = `<div class="msg-bubble">${text}</div><div class="msg-time">${now}</div>`;
+      msgs.appendChild(div);
+      msgs.scrollTop = msgs.scrollHeight;
+    }
+  </script>
+</body>
+</html>

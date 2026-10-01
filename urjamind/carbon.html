@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UrjaMind – Carbon Report</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg:#050a14; --bg2:#080f1e; --surface:#0d1a2e; --surface2:#0f2040;
+      --border:rgba(99,179,237,0.12); --border2:rgba(99,179,237,0.22);
+      --blue:#3b9eff; --blue-light:#63b3ed; --amber:#f6a623;
+      --green:#38d9a9; --red:#ff6b6b; --text:#e8f4fd; --text2:#8ba7c7; --text3:#4a6580;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:'Inter',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+    nav { position:fixed; top:0; left:0; right:0; z-index:100; backdrop-filter:blur(20px); background:rgba(5,10,20,0.9); border-bottom:1px solid var(--border); }
+    .nav-c { max-width:1400px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; padding:0 24px; height:64px; }
+    .logo-text { font-family:'Outfit',sans-serif; font-weight:800; font-size:22px; background:linear-gradient(135deg,#3b9eff,#f6a623); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+    .nav-link { padding:8px 14px; border-radius:8px; color:var(--text2); text-decoration:none; font-size:14px; font-weight:500; transition:all 0.2s; }
+    .nav-link:hover, .nav-link.active { color:var(--blue-light); background:rgba(59,158,255,0.1); }
+    .nav-logo { display:flex; align-items:center; gap:10px; text-decoration:none; }
+    .nav-links { display:flex; gap:4px; }
+
+    .page { padding:80px 24px 40px; max-width:1200px; margin:0 auto; }
+
+    /* Report Header */
+    .report-header-card {
+      background:linear-gradient(135deg,rgba(13,26,46,0.95),rgba(20,50,40,0.9));
+      border:1px solid rgba(56,217,169,0.25); border-radius:24px; padding:36px 40px;
+      display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:28px; flex-wrap:wrap; gap:24px;
+    }
+    .report-logo { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+    .report-logo-icon { font-size:36px; }
+    .report-logo-text { font-family:'Outfit',sans-serif; font-size:26px; font-weight:800; }
+    .report-meta { font-size:13px; color:var(--text2); line-height:1.8; }
+    .report-meta strong { color:var(--text); }
+    .ghg-badge {
+      display:inline-flex; align-items:center; gap:8px;
+      background:rgba(56,217,169,0.1); border:1px solid rgba(56,217,169,0.3);
+      border-radius:12px; padding:12px 20px; font-size:13px; font-weight:700; color:var(--green);
+    }
+    .export-group { display:flex; flex-direction:column; gap:10px; }
+    .export-pill { display:inline-flex; align-items:center; gap:8px; padding:10px 20px; border-radius:10px; font-size:13px; font-weight:700; cursor:pointer; transition:all 0.2s; border:none; }
+    .export-pill.pdf { background:rgba(255,107,107,0.15); color:#ff6b6b; border:1px solid rgba(255,107,107,0.3); }
+    .export-pill.xlsx { background:rgba(56,217,169,0.1); color:var(--green); border:1px solid rgba(56,217,169,0.3); }
+    .export-pill.api { background:rgba(167,139,250,0.1); color:#a78bfa; border:1px solid rgba(167,139,250,0.3); }
+    .export-pill:hover { transform:translateY(-1px); filter:brightness(1.2); }
+
+    /* KPI Strip */
+    .kpi-strip { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px; }
+    @media(max-width:800px) { .kpi-strip{grid-template-columns:1fr 1fr} }
+    .kpi-c { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:20px; position:relative; overflow:hidden; }
+    .kpi-c::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; }
+    .kpi-c.scope2::before { background:linear-gradient(90deg,#3b9eff,#63b3ed); }
+    .kpi-c.scope1::before { background:linear-gradient(90deg,#f6a623,#fbbf24); }
+    .kpi-c.intensity::before { background:linear-gradient(90deg,#38d9a9,#34d399); }
+    .kpi-c.saved::before { background:linear-gradient(90deg,#a78bfa,#7c3aed); }
+    .kpi-c-label { font-size:11px; font-weight:700; color:var(--text3); text-transform:uppercase; letter-spacing:1px; margin-bottom:8px; }
+    .kpi-c-val { font-family:'Outfit',sans-serif; font-size:28px; font-weight:800; }
+    .kpi-c-unit { font-size:13px; color:var(--text2); margin-top:2px; }
+    .kpi-c-delta { font-size:11px; font-weight:700; margin-top:8px; padding:2px 8px; border-radius:100px; display:inline-block; }
+    .kpi-c-delta.red { background:rgba(255,107,107,0.12); color:var(--red); }
+    .kpi-c-delta.green { background:rgba(56,217,169,0.12); color:var(--green); }
+
+    /* Charts */
+    .chart-row { display:grid; grid-template-columns:2fr 1fr; gap:20px; margin-bottom:24px; }
+    @media(max-width:800px) { .chart-row{grid-template-columns:1fr} }
+    .card { background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:24px; }
+    .card h3 { font-size:15px; font-weight:700; margin-bottom:4px; }
+    .card p { font-size:12px; color:var(--text3); margin-bottom:20px; }
+
+    /* M&V Table */
+    .mv-section { margin-bottom:24px; }
+    .mv-section h3 { font-size:16px; font-weight:700; margin-bottom:16px; }
+    .mv-table { width:100%; border-collapse:collapse; }
+    .mv-table th { font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:0.5px; padding:10px 14px; border-bottom:1px solid var(--border); text-align:left; }
+    .mv-table td { padding:14px; border-bottom:1px solid var(--border); font-size:13px; }
+    .mv-table tr:last-child td { border-bottom:none; }
+    .mv-table tbody tr:hover { background:rgba(59,158,255,0.04); }
+    .status-verified { display:inline-flex; align-items:center; gap:4px; background:rgba(56,217,169,0.1); border:1px solid rgba(56,217,169,0.25); color:var(--green); border-radius:100px; padding:3px 12px; font-size:11px; font-weight:700; }
+    .status-projected { display:inline-flex; align-items:center; gap:4px; background:rgba(246,166,35,0.1); border:1px solid rgba(246,166,35,0.25); color:var(--amber); border-radius:100px; padding:3px 12px; font-size:11px; font-weight:700; }
+
+    /* Buyer Section */
+    .buyer-section { display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:24px; }
+    @media(max-width:800px) { .buyer-section{grid-template-columns:1fr} }
+    .buyer-card { background:linear-gradient(135deg,rgba(13,26,46,0.9),rgba(20,20,50,0.8)); border:1px solid rgba(167,139,250,0.2); border-radius:18px; padding:24px; }
+    .buyer-card h3 { font-size:15px; font-weight:700; margin-bottom:12px; color:#a78bfa; }
+    .buyer-checklist { display:flex; flex-direction:column; gap:10px; }
+    .check-item { display:flex; align-items:flex-start; gap:10px; font-size:13px; color:var(--text2); }
+    .check-item.done { color:var(--text); }
+    .check-icon { font-size:16px; flex-shrink:0; }
+    .cbam-card { background:linear-gradient(135deg,rgba(13,26,46,0.9),rgba(40,20,20,0.8)); border:1px solid rgba(255,107,107,0.2); border-radius:18px; padding:24px; }
+    .cbam-card h3 { font-size:15px; font-weight:700; margin-bottom:12px; color:#ff6b6b; }
+
+    /* Audit Trail */
+    .audit-section { margin-bottom:24px; }
+    .audit-section h3 { font-size:16px; font-weight:700; margin-bottom:16px; }
+    .audit-list { display:flex; flex-direction:column; gap:0; }
+    .audit-item { display:flex; align-items:flex-start; gap:16px; padding:14px 0; border-bottom:1px solid var(--border); position:relative; }
+    .audit-item:last-child { border-bottom:none; }
+    .audit-item::before { content:''; position:absolute; left:15px; top:32px; bottom:-14px; width:2px; background:var(--border); }
+    .audit-item:last-child::before { display:none; }
+    .audit-dot { width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; z-index:1; }
+    .audit-dot.green { background:rgba(56,217,169,0.15); border:1px solid rgba(56,217,169,0.3); }
+    .audit-dot.blue { background:rgba(59,158,255,0.15); border:1px solid rgba(59,158,255,0.3); }
+    .audit-dot.amber { background:rgba(246,166,35,0.15); border:1px solid rgba(246,166,35,0.3); }
+    .audit-content { flex:1; }
+    .audit-action { font-size:13px; font-weight:600; }
+    .audit-detail { font-size:12px; color:var(--text2); margin-top:3px; }
+    .audit-time { font-size:11px; color:var(--text3); flex-shrink:0; }
+
+    ::-webkit-scrollbar { width:4px; } ::-webkit-scrollbar-track { background:transparent; } ::-webkit-scrollbar-thumb { background:var(--surface2); border-radius:2px; }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="nav-c">
+      <a href="index.html" class="nav-logo"><span style="font-size:22px">⚡</span><span class="logo-text">UrjaMind</span></a>
+      <div class="nav-links">
+        <a href="upload.html" class="nav-link">Data Upload</a>
+        <a href="dashboard.html" class="nav-link">Energy Dashboard</a>
+        <a href="scheduler.html" class="nav-link">Scheduler</a>
+        <a href="carbon.html" class="nav-link active">Carbon Report</a>
+      </div>
+      <button onclick="alert('📄 GHG Protocol-compliant PDF report generated!\n\nContents:\n✅ Scope 1 & 2 emissions summary\n✅ Monthly emission trend\n✅ Intensity metrics\n✅ M&V verification table\n✅ CEA emission factor reference\n✅ Auditor signature block')" style="padding:10px 20px;background:linear-gradient(135deg,#38d9a9,#059669);border:none;border-radius:10px;color:#fff;font-weight:700;font-size:14px;cursor:pointer;">📄 Export Full Report</button>
+    </div>
+  </nav>
+
+  <div class="page">
+    <!-- Report Header -->
+    <div class="report-header-card">
+      <div>
+        <div class="report-logo">
+          <div class="report-logo-icon">🌿</div>
+          <div>
+            <div class="report-logo-text">GHG Emissions Report</div>
+            <div style="font-size:13px;color:var(--text3)">UrjaMind · GHG Protocol aligned</div>
+          </div>
+        </div>
+        <div class="report-meta">
+          <strong>Organisation:</strong> Rajkot Precision Foundry Pvt. Ltd.<br/>
+          <strong>Reporting Period:</strong> April 2026 – September 2026 (6 months)<br/>
+          <strong>Boundary:</strong> Operational Control · Single plant unit<br/>
+          <strong>Standard:</strong> GHG Protocol Corporate Standard (Scope 1 & 2)<br/>
+          <strong>Emission Factor:</strong> CEA Grid EF 2023 — 0.716 kgCO₂/kWh (Western Region)
+        </div>
+        <div style="margin-top:16px;">
+          <div class="ghg-badge">✅ GHG Protocol Aligned · Scope 1 & 2</div>
+        </div>
+      </div>
+      <div class="export-group">
+        <button class="export-pill pdf" onclick="alert('PDF report downloaded!')">📄 Download PDF</button>
+        <button class="export-pill xlsx" onclick="alert('Excel data exported!')">📊 Export Excel</button>
+        <button class="export-pill api" onclick="alert('Buyer API link copied!\nhttps://urjamind.ai/report/RPF-2026-H1')">🔗 Share Buyer Link</button>
+      </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpi-strip">
+      <div class="kpi-c scope2">
+        <div class="kpi-c-label">Scope 2 Emissions</div>
+        <div class="kpi-c-val" style="color:var(--blue-light)">138.4</div>
+        <div class="kpi-c-unit">tCO₂e · Apr–Sep 2026</div>
+        <div class="kpi-c-delta red">↑ 9.2% vs prior period</div>
+      </div>
+      <div class="kpi-c scope1">
+        <div class="kpi-c-label">Scope 1 Emissions</div>
+        <div class="kpi-c-val" style="color:var(--amber)">18.6</div>
+        <div class="kpi-c-unit">tCO₂e · Diesel, furnace oil</div>
+        <div class="kpi-c-delta red">↑ 3.1% vs prior period</div>
+      </div>
+      <div class="kpi-c intensity">
+        <div class="kpi-c-label">Emission Intensity</div>
+        <div class="kpi-c-val" style="color:var(--green)">2.74</div>
+        <div class="kpi-c-unit">kgCO₂e per kg casting</div>
+        <div class="kpi-c-delta red">↑ 8.7% vs baseline</div>
+      </div>
+      <div class="kpi-c saved">
+        <div class="kpi-c-label">Projected Saving</div>
+        <div class="kpi-c-val" style="color:#a78bfa">14.2</div>
+        <div class="kpi-c-unit">tCO₂e / year with UrjaMind</div>
+        <div class="kpi-c-delta green">↓ 10.3% potential</div>
+      </div>
+    </div>
+
+    <!-- Charts -->
+    <div class="chart-row">
+      <div class="card">
+        <h3>Monthly Emission Trend</h3>
+        <p>Scope 1 (diesel + fuel) and Scope 2 (grid electricity) — tCO₂e per month</p>
+        <canvas id="emissionChart" height="200"></canvas>
+      </div>
+      <div class="card">
+        <h3>Emission Sources</h3>
+        <p>Breakdown by category — 6-month total</p>
+        <canvas id="scopeDonut" height="200"></canvas>
+      </div>
+    </div>
+
+    <!-- M&V Table -->
+    <div class="mv-section card">
+      <h3>📋 Measurement & Verification (M&V) — IPMVP-style</h3>
+      <p style="margin-bottom:16px">Verified savings from each intervention, compared to production-adjusted baseline</p>
+      <table class="mv-table">
+        <thead>
+          <tr>
+            <th>Intervention</th>
+            <th>Baseline (kWh)</th>
+            <th>Actual (kWh)</th>
+            <th>Saving (kWh)</th>
+            <th>CO₂ Avoided</th>
+            <th>₹ Saved</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Compressor idle control (nights)</td>
+            <td>2,880</td>
+            <td>1,440</td>
+            <td style="color:var(--green);font-weight:700">1,440</td>
+            <td>1.03 tCO₂e</td>
+            <td style="color:var(--green);font-weight:700">₹8,928</td>
+            <td><span class="status-verified">✅ Verified</span></td>
+          </tr>
+          <tr>
+            <td>Furnace shift to off-peak ToD</td>
+            <td>21,400</td>
+            <td>21,400</td>
+            <td style="color:var(--amber);font-weight:700">0 (same kWh)</td>
+            <td>0 tCO₂e</td>
+            <td style="color:var(--green);font-weight:700">₹10,200</td>
+            <td><span class="status-verified">✅ Tariff saving</span></td>
+          </tr>
+          <tr>
+            <td>Power factor correction (target)</td>
+            <td>—</td>
+            <td>—</td>
+            <td style="color:var(--amber);font-weight:700">Projected 420</td>
+            <td>0.30 tCO₂e</td>
+            <td style="color:var(--amber);font-weight:700">₹1,400</td>
+            <td><span class="status-projected">⏳ Projected</span></td>
+          </tr>
+          <tr>
+            <td>Press #3 motor maintenance</td>
+            <td>—</td>
+            <td>—</td>
+            <td style="color:var(--amber);font-weight:700">Projected 380</td>
+            <td>0.27 tCO₂e</td>
+            <td style="color:var(--amber);font-weight:700">₹2,356</td>
+            <td><span class="status-projected">⏳ Projected</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <div style="margin-top:16px;padding:12px 16px;background:rgba(56,217,169,0.07);border-radius:10px;font-size:13px;color:var(--text2)">
+        📌 <strong>Note:</strong> Verified savings from 1 month of actual data. % claims will be updated as more data accumulates. Baseline = regression model on 6-month history, adjusted for production volume and weather.
+      </div>
+    </div>
+
+    <!-- Buyer + CBAM -->
+    <div class="buyer-section">
+      <div class="buyer-card">
+        <h3>🌍 Export Buyer Disclosure Readiness</h3>
+        <div class="buyer-checklist">
+          <div class="check-item done"><div class="check-icon">✅</div><div><strong>Scope 2 location-based</strong> — CEA grid factor applied</div></div>
+          <div class="check-item done"><div class="check-icon">✅</div><div><strong>Scope 1 direct emissions</strong> — Diesel, furnace oil logged</div></div>
+          <div class="check-item done"><div class="check-icon">✅</div><div><strong>GHG Protocol alignment</strong> — Reporting boundary declared</div></div>
+          <div class="check-item done"><div class="check-icon">✅</div><div><strong>Emission intensity metric</strong> — kgCO₂e/kg product</div></div>
+          <div class="check-item done"><div class="check-icon">✅</div><div><strong>Machine-readable data</strong> — JSON/API available</div></div>
+          <div class="check-item" style="opacity:0.5"><div class="check-icon">⬜</div><div>Third-party verification (optional tier)</div></div>
+        </div>
+      </div>
+      <div class="cbam-card">
+        <h3>⚖️ CBAM / ESG Applicability Note</h3>
+        <p style="font-size:13px;color:var(--text2);line-height:1.8;margin-bottom:12px">
+          EU CBAM (Carbon Border Adjustment Mechanism) currently covers iron/steel, cement, aluminium, fertilisers, electricity, hydrogen — <strong style="color:#ff9999">verify current sector list before claims.</strong>
+        </p>
+        <p style="font-size:13px;color:var(--text2);line-height:1.8;margin-bottom:12px">
+          For foundry exports to EU: embedded carbon per tonne of casting must be declared. UrjaMind provides this calculation with audit trail.
+        </p>
+        <div style="background:rgba(255,107,107,0.08);border:1px solid rgba(255,107,107,0.2);border-radius:10px;padding:12px;font-size:12px;color:#ff9999">
+          ⚠️ This report is for internal decision-making and buyer communication. For regulatory compliance, engage a certified GHG verifier.
+        </div>
+      </div>
+    </div>
+
+    <!-- Audit Trail -->
+    <div class="audit-section card">
+      <h3>🔍 Data Audit Trail</h3>
+      <p style="margin-bottom:20px">Every number is traceable to source data — no black box</p>
+      <div class="audit-list">
+        <div class="audit-item">
+          <div class="audit-dot green">📥</div>
+          <div class="audit-content">
+            <div class="audit-action">DISCOM meter data ingested</div>
+            <div class="audit-detail">48,240 kWh total · 30-min intervals · Sep 2026 · Source: Gujarat DISCOM CSV export</div>
+          </div>
+          <div class="audit-time">Sep 30, 09:12</div>
+        </div>
+        <div class="audit-item">
+          <div class="audit-dot blue">🔢</div>
+          <div class="audit-content">
+            <div class="audit-action">Scope 2 calculation</div>
+            <div class="audit-detail">48,240 kWh × 0.716 kgCO₂/kWh (CEA Western Region 2023) = 34.54 tCO₂e · Sep 2026</div>
+          </div>
+          <div class="audit-time">Sep 30, 09:13</div>
+        </div>
+        <div class="audit-item">
+          <div class="audit-dot amber">⛽</div>
+          <div class="audit-content">
+            <div class="audit-action">Scope 1 — Diesel fuel log</div>
+            <div class="audit-detail">320 litres diesel × 2.68 kgCO₂/litre (IPCC AR6) = 0.86 tCO₂e · Sep 2026</div>
+          </div>
+          <div class="audit-time">Sep 30, 09:14</div>
+        </div>
+        <div class="audit-item">
+          <div class="audit-dot green">📊</div>
+          <div class="audit-content">
+            <div class="audit-action">M&V baseline regression trained</div>
+            <div class="audit-detail">LightGBM model · R²=0.91 · Features: production_kg, shift_hours, max_temp · Apr–Aug data</div>
+          </div>
+          <div class="audit-time">Sep 30, 09:15</div>
+        </div>
+        <div class="audit-item">
+          <div class="audit-dot blue">✅</div>
+          <div class="audit-content">
+            <div class="audit-action">Report finalised and signed</div>
+            <div class="audit-detail">SHA-256 hash: a4f2e8... · Report version 1.0 · Ready for buyer disclosure</div>
+          </div>
+          <div class="audit-time">Sep 30, 09:16</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Emission trend chart
+    const months = ['Apr','May','Jun','Jul','Aug','Sep'];
+    const scope2 = [20.8,21.2,23.4,24.0,25.6,23.4];
+    const scope1 = [2.8,3.0,3.2,3.4,3.0,3.2];
+    new Chart(document.getElementById('emissionChart'), {
+      type:'bar',
+      data:{
+        labels:months,
+        datasets:[
+          {label:'Scope 2 (Grid electricity)',data:scope2,backgroundColor:'rgba(59,158,255,0.6)',borderRadius:6,stack:'s'},
+          {label:'Scope 1 (Fuel)',data:scope1,backgroundColor:'rgba(246,166,35,0.6)',borderRadius:6,stack:'s'}
+        ]
+      },
+      options:{
+        responsive:true,
+        plugins:{legend:{labels:{color:'#8ba7c7',font:{size:11}}}},
+        scales:{
+          x:{ticks:{color:'#4a6580'},grid:{color:'rgba(255,255,255,0.04)'}},
+          y:{ticks:{color:'#4a6580',callback:v=>v+' t'},grid:{color:'rgba(255,255,255,0.06)'},title:{display:true,text:'tCO₂e',color:'#4a6580'}}
+        }
+      }
+    });
+
+    // Scope donut
+    new Chart(document.getElementById('scopeDonut'), {
+      type:'doughnut',
+      data:{
+        labels:['Scope 2: Grid Electricity (88%)','Scope 1: Diesel (7%)','Scope 1: Other Fuel (5%)'],
+        datasets:[{
+          data:[138.4,12.4,6.2],
+          backgroundColor:['#3b9eff','#f6a623','#38d9a9'],
+          borderWidth:0, hoverOffset:6
+        }]
+      },
+      options:{
+        responsive:true, cutout:'65%',
+        plugins:{legend:{position:'bottom',labels:{color:'#8ba7c7',font:{size:11},padding:10}}}
+      }
+    });
+  </script>
+</body>
+</html>
