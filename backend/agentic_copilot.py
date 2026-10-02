@@ -390,3 +390,23 @@ def ask_agentic_copilot(user_message: str) -> Dict[str, Any]:
     fb["role"] = "bot"
     fb["engine"] = "deterministic-tool-runner"
     return fb
+
+
+if __name__ == "__main__":
+    import sys
+    print("=" * 60)
+    print("UrjaMind Agentic Copilot — CLI Interactive & Demo Mode")
+    print("Tools registered: get_kpis, get_alerts, run_optimizer, get_carbon")
+    print("=" * 60)
+
+    demo_query = sys.argv[1] if len(sys.argv) > 1 else "Scheduler se kitna bachega?"
+    print(f"\nUser Query: '{demo_query}'\n")
+    res = ask_agentic_copilot(demo_query)
+    print("Engine:", res.get("engine"))
+    print("Tool Called:", res.get("tool_called"))
+    print("-" * 60)
+    # Windows cp1252 safe printing
+    safe_content = res["content"].encode("ascii", "replace").decode("ascii")
+    print(safe_content)
+    print("=" * 60)
+

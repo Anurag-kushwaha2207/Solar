@@ -215,7 +215,8 @@ if __name__ == "__main__":
     res = run_resolution_ablation_experiment()
     print("=== IMDELD NILM ABLATION RESULTS ===")
     print("Dataset:", res["dataset"])
-    print("Conclusion:", res["conclusion"])
+    print("Conclusion:", res["conclusion"].replace("R²", "R^2"))
     print()
     for row in res["ablation"]:
-        print(f"[{row['resolution']:7s}] Macro R²: {row['macro_r2']:.3f} | Furnace R²: {row['furnace_r2']:.3f} | MAE: {row['macro_mae_kw']:.2f} kW")
+        print(f"[{row['resolution']:7s}] Macro R^2: {row['macro_r2']:.3f} | Furnace R^2: {row['furnace_r2']:.3f} | MAE: {row['macro_mae_kw']:.2f} kW")
+
