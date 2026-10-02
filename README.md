@@ -1,98 +1,111 @@
-# ⚡ UrjaMind — AI Energy Intelligence for Indian SMEs
+# UrjaMind — AI Energy Intelligence for Indian SMEs
 
-> **Hardware-free · AI-driven · Zero data scientists required**
+> **Hardware-free · Physics Simulation (Phase 1) · Real CP-SAT Optimizer**
 
-UrjaMind helps Indian SMEs reduce energy costs by **15–25%** using only data they already have — electricity bills, DISCOM meter data, and production logs. No sensors, no expensive IoT deployment.
-
----
-
-## 🔗 Live Demo
-
-Open `urjamind/index.html` in your browser to explore the full prototype.
-
-| Screen | File | Description |
-|--------|------|-------------|
-| 🏠 Landing Page | `urjamind/index.html` | Problem, pipeline overview, data tiers |
-| 📥 Data Upload | `urjamind/upload.html` | Upload bill, meter CSV, production log |
-| 📊 Energy Dashboard | `urjamind/dashboard.html` | NILM disaggregation, anomaly alerts, LLM copilot |
-| 📅 Scheduler | `urjamind/scheduler.html` | ToD tariff optimiser, Gantt chart |
-| 🌿 Carbon Report | `urjamind/carbon.html` | GHG Protocol Scope 1 & 2, M&V table |
+UrjaMind helps Indian SMEs reduce energy costs by optimizing ToD scheduling — using only data they already have (electricity bills, DISCOM meter data, production logs). No sensors, no expensive IoT deployment.
 
 ---
 
-## 🧠 The 6-Layer AI Pipeline
+## Live Demo
+
+**Full-stack app:** `cd frontend && npm run dev` + `cd backend && uvicorn main:app`  
+**Static prototype:** Open `urjamind/index.html` in browser.
+
+---
+
+## What is Actually Working (Phase 1)
+
+| Feature | Status | Honest Description |
+|---------|--------|--------------------|
+| Data Upload | ✅ Working | File accepted. Bill OCR: **Phase 2** (planned) |
+| Machine Breakdown (NILM) | ⚠ Simulated | Physics rules from equipment register. ML model: **Phase 2** |
+| Anomaly Alerts | ⚠ Simulated | Physics-based rules (4.2 kW idle × 4h × 22 nights). LSTM-VAE: **Phase 2** |
+| **Tariff Scheduler** | ✅ **REAL** | OR-Tools CP-SAT 9.x. OPTIMAL in 0.3s. Saving: Rs.40,560/month (17.6%) |
+| Carbon Report | ✅ Real calculation | 48,240 kWh × 0.716 kg/kWh = 34.54 tCO₂e (CEA 2023-24 Western Grid) |
+| Copilot | ⚠ Rule-based | Intent matching + constants.py. LLM with RAG: **Phase 2** |
+| Bill OCR | ❌ Not yet | Always returns demo values. PaddleOCR integration: **Phase 2** |
+
+---
+
+## Scheduler Result (Verified)
 
 ```
-Bill PDF / DISCOM CSV / WhatsApp / Production Log
+Current schedule (daily):  Rs.8,884
+CP-SAT optimal (daily):    Rs.7,324
+Saving per working day:    Rs.1,560
+Working days/month:        26
+Monthly saving:            Rs.40,560  (17.6%)
+
+What changed:
+  Furnace Melt #1: 6AM (Rs.6.20) → midnight (Rs.4.50)  — saves Rs.680/day
+  Furnace Melt #2: 6PM (Rs.8.20) → 3PM  (Rs.6.20)     — saves Rs.880/day
+  Press + Fettling: unchanged (no off-peak window available, deadline 5PM)
+  Safety Hold: fixed 9AM (regulatory, cannot move)
+```
+
+Daily energy consistency check:
+- Furnace (21 slots × 160 kW × 0.25h): 840 kWh × 26 days = 21,840 kWh ≈ 21,400 ✓
+- Compressor (18 slots × 75 kW × 0.25h): 338 kWh × 26 days = 8,775 kWh ≈ 8,900 ✓
+- Press (14 slots × 66 kW × 0.25h): 231 kWh × 26 days = 6,006 kWh ≈ 6,200 ✓
+- Fettling (20 slots × 36 kW × 0.25h): 180 kWh × 26 days = 4,680 kWh ≈ 4,800 ✓
+- HVAC base: 18 kW × 12.8h/day × 30 days = 6,912 kWh ≈ 6,940 ✓
+- **Total: ~48,213 kWh ≈ 48,240 kWh** ✓ (consistent with bill)
+
+---
+
+## 6-Layer Pipeline (Current Status)
+
+```
+Bill PDF / DISCOM CSV / Production Log
         ↓
-[Layer 1] Data Ingestion — OCR, schema validation
+[Layer 1] Data Ingestion — file accepted; OCR parsing PLANNED Phase 2
         ↓
-[Layer 2] Plant Digital Twin — SimPy simulation, synthetic labeled data
+[Layer 2] Digital Twin — physics simulation (Phase 1); SimPy PLANNED Phase 2
         ↓
-[Layer 3] NILM Disaggregation — Transformer/Seq2Point, physical constraints
+[Layer 3] NILM Disaggregation — physics rules (Phase 1); Seq2Point/IMDELD PLANNED Phase 2
         ↓
-[Layer 4] Anomaly & Waste Detection — LSTM-VAE, drift detection
+[Layer 4] Anomaly Detection — rule-based physics (Phase 1); LSTM-VAE PLANNED Phase 2
         ↓
-[Layer 5] Tariff-Aware Scheduler — CP-SAT + PPO RL
+[Layer 5] Tariff Scheduler — REAL CP-SAT (OR-Tools 9.x) ✅; PPO RL PLANNED Phase 2
         ↓
-[Layer 6] Carbon Module + LLM Copilot — GHG Protocol + Hindi/Hinglish RAG
+[Layer 6] Carbon (real CEA calc ✅) + Copilot (rule-based; LLM PLANNED Phase 2)
 ```
 
 ---
 
-## 💡 Problem Being Solved
+## Numbers — All From Single Source of Truth
 
-Indian SMEs (foundry, textile, ceramics, brick kiln, etc.) face 4 critical gaps:
+All numbers derive from `backend/constants.py` — no inconsistencies across endpoints:
 
-1. **Visibility Gap** — Bill sirf ek total number; machine-level breakdown nahi
-2. **Diagnosis Gap** — Bill kyun badha? Koi tool nahi
-3. **Action Gap** — ToD tariff ka fayda kaise lein? Koi scheduler nahi
-4. **Proof Gap** — Export buyer carbon data maang raha hai, GHG report nahi hai
-
----
-
-## 🎯 Key Features
-
-- **Zero Hardware** — Existing bill + DISCOM data kaafi hai
-- **Data-Tier Adaptive** — Monthly bill (Tier 1) se high-res data (Tier 3) tak graceful degradation
-- **Digital Twin** — SimPy-based synthetic labeled data for NILM training
-- **Vernacular Copilot** — Hindi/Hinglish LLM with tool-grounded answers (no hallucination)
-- **M&V Verified** — IPMVP-style measurement & verification of every saving claim
-- **GHG Protocol** — Scope 1 & 2 auto-report with full audit trail
+| Metric | Value | Source |
+|--------|-------|--------|
+| Total kWh Sep 2026 | 48,240 kWh | DISCOM meter |
+| Total bill | Rs.2,96,500 | DISCOM bill |
+| Blended rate | Rs.6.08/kWh | 293,300 ÷ 48,240 |
+| Scope 2 emissions | 34.54 tCO₂e | 48,240 × 0.716 kg/kWh ÷ 1000 |
+| Emission factor | 0.716 kg/kWh | CEA v18 Western Regional Grid 2023-24 |
+| Scheduler saving | Rs.40,560/month | CP-SAT OPTIMAL (real solver) |
+| Anomaly savings | Rs.22,600/month | Physics simulation (labelled as such) |
 
 ---
 
-## 📊 Target Impact (Simulation)
+## Tech Stack (Phase 1 — What's Actually Installed)
 
-| Metric | Value |
-|--------|-------|
-| Energy cost reduction | 15–25% |
-| Avg. annual saving / SME unit | ₹1.2L+ |
-| Carbon avoided | ~14 tCO₂e/year/unit |
-| Hardware required | **Zero** |
-
-> *Numbers based on public dataset simulation (HIPE, IMDELD) + synthetic digital twin. Actual savings to be verified on pilot plants.*
-
----
-
-## 🛠️ Tech Stack
-
-| Layer | Tech |
-|-------|------|
-| OCR / Ingestion | PaddleOCR, Pydantic, FastAPI |
-| Digital Twin | SimPy, NumPy |
-| Disaggregation (NILM) | PyTorch Transformer, Seq2Point CNN |
-| Anomaly Detection | LSTM-VAE, Isolation Forest |
-| Scheduler | OR-Tools CP-SAT, Stable-Baselines3 PPO |
-| Baseline Model | LightGBM + SHAP |
-| Carbon Module | GHG Protocol, CEA emission factors |
-| LLM Copilot | LangChain + RAG + tool-calling guardrails |
-| Frontend | React / Streamlit |
-| Database | PostgreSQL + TimescaleDB |
+| Component | Status | Package |
+|-----------|--------|---------|
+| API backend | ✅ | FastAPI 0.111, Uvicorn |
+| **Scheduler** | ✅ **REAL** | `ortools==9.15.6755` |
+| Frontend | ✅ | React + Vite |
+| Data processing | ✅ | pandas, numpy, scipy |
+| Analytics | ✅ | scikit-learn (baseline regression) |
+| NILM model | ❌ Phase 2 | PyTorch (not in requirements yet) |
+| Bill OCR | ❌ Phase 2 | PaddleOCR (not installed) |
+| LLM Copilot | ❌ Phase 2 | Gemini API / LangChain (not integrated) |
+| PPO RL | ❌ Phase 2 | stable-baselines3 (not installed) |
 
 ---
 
-## 🏭 Target Industries
+## Target Industries
 
 - Foundries (Rajkot, Coimbatore)
 - Textile mills (Ludhiana, Surat)
@@ -102,4 +115,5 @@ Indian SMEs (foundry, textile, ceramics, brick kiln, etc.) face 4 critical gaps:
 
 ---
 
-*Built for Hackathon Submission · October 2026*
+*Built for Hackathon Submission · October 2026*  
+*Honesty policy: Every claim is labelled Phase 1 (working) or Phase 2 (planned).*

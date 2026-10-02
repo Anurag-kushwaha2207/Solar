@@ -10,19 +10,19 @@ const PROBLEMS = [
 ]
 
 const LAYERS = [
-  { n:1, icon:'📥', label:'Data Ingestion',     sub:'Bill PDF, DISCOM CSV, WhatsApp photo' },
-  { n:2, icon:'🏗️', label:'Digital Twin',       sub:'SimPy simulation → synthetic labels' },
-  { n:3, icon:'🧠', label:'NILM Disaggregation',sub:'Transformer/Seq2Point, physical constraints' },
-  { n:4, icon:'🔴', label:'Anomaly Detection',  sub:'LSTM-VAE + drift detector' },
-  { n:5, icon:'📅', label:'Tariff Scheduler',   sub:'CP-SAT + PPO RL hybrid' },
-  { n:6, icon:'🌿', label:'Carbon + Copilot',   sub:'GHG Protocol + Hindi RAG LLM' },
+  { n:1, icon:'📥', label:'Data Ingestion',     sub:'Bill PDF/CSV upload — bill parsing in Phase 2' },
+  { n:2, icon:'🏗️', label:'Digital Twin',       sub:'Physics simulation (Phase 1). SimPy planned Phase 2' },
+  { n:3, icon:'🧠', label:'NILM Disaggregation',sub:'Physics sim Phase 1. Seq2Point/IMDELD in Phase 2' },
+  { n:4, icon:'🔴', label:'Anomaly Detection',  sub:'Physics rules Phase 1. LSTM-VAE in Phase 2' },
+  { n:5, icon:'📅', label:'Tariff Scheduler',   sub:'CP-SAT (real, OR-Tools). PPO RL is Phase 2' },
+  { n:6, icon:'🌿', label:'Carbon + Copilot',   sub:'GHG Scope 1+2, rule-based copilot. LLM in Phase 2' },
 ]
 
 const STATS = [
-  { val:'15–25%', label:'Energy cost reduction', color:'blue'  },
-  { val:'₹1.2L+', label:'Annual saving per SME', color:'amber' },
-  { val:'14 tCO₂', label:'Carbon avoided/year',  color:'green' },
-  { val:'₹0',     label:'Hardware cost',         color:'purple'},
+  { val:'17.6%',    label:'Scheduler saving (CP-SAT verified)', color:'blue'  },
+  { val:'Rs.40K+',  label:'Tariff saving/month (26 working days)', color:'amber' },
+  { val:'34.5 tCO2',label:'Sep 2026 Scope 2 emissions tracked', color:'green' },
+  { val:'Rs.0',     label:'Hardware cost (software-only)',        color:'purple'},
 ]
 
 const INDUSTRIES = ['🔩 Foundry','🧵 Textile','🏺 Ceramics','🧱 Brick Kiln','🧪 Chemical','🍞 Food Processing']
