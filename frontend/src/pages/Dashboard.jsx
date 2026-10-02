@@ -65,10 +65,15 @@ function AlertCard({ alert, onResolve }) {
 }
 
 // ── Copilot Panel ────────────────────────────────────────────────────────────
-function Copilot() {
+function Copilot({ kpis }) {
+  const currentKwh = kpis?.kpis?.total_kwh || 48240
+  const isCustom = kpis?.data_source && !kpis.data_source.includes('demo_baseline')
+
   const [msgs, setMsgs] = useState([{
     role:'bot',
-    content:'Namaste! 🙏 Main aapka UrjaMind Copilot hun. Rajkot Foundry ka data analyze ho gaya hai.\n\nIs mahine **3 operational anomalies** detect hui hain — potential saving: **₹12,400/month** (Scheduler tab mein ToD optimization se ₹47,500/month alag se potential hai).\n\nKoi bhi sawaal pucho!'
+    content: isCustom
+      ? `Namaste! 🙏 Main aapka UrjaMind Copilot hun. Uploaded plant data (${currentKwh.toLocaleString()} kWh) analyze ho gaya hai.\n\nLive analytical tools execute karke instant answers deta hun. Koi bhi sawaal pucho!`
+      : 'Namaste! 🙏 Main aapka UrjaMind Copilot hun. Rajkot Foundry ka data analyze ho gaya hai.\n\nIs mahine **3 operational anomalies** detect hui hain — potential saving: **₹12,400/month** (Scheduler tab mein ToD optimization se ₹47,500/month alag se potential hai).\n\nKoi bhi sawaal pucho!'
   }])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -84,7 +89,6 @@ function Copilot() {
   useEffect(() => { endRef.current?.scrollIntoView({behavior:'smooth'}) }, [msgs])
 
   async function send(text) {
-
     if (!text.trim() || loading) return
     setMsgs(m => [...m, {role:'user', content:text}])
     setInput('')
@@ -99,7 +103,6 @@ function Copilot() {
     } finally { setLoading(false) }
   }
 
-
   function renderContent(text) {
     return text.split('\n').map((line, i) => {
       const bold = line.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
@@ -113,7 +116,9 @@ function Copilot() {
         <div className="copilot-avatar">🤖</div>
         <div>
           <div className="copilot-name">UrjaMind Copilot</div>
-          <div className="copilot-status">● Online · Hindi/Hinglish</div>
+          <div className="copilot-status">
+            ● Online · {isCustom ? `Active: ${currentKwh.toLocaleString()} kWh` : 'Demo (48,240 kWh)'}
+          </div>
         </div>
       </div>
       <div className="copilot-quick">
@@ -322,7 +327,7 @@ export default function Dashboard() {
         </div>
 
         {/* Copilot sidebar */}
-        <Copilot />
+        <Copilot kpis={kpis} />
       </div>
     </div>
   )

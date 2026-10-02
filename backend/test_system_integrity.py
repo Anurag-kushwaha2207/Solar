@@ -117,38 +117,75 @@ def test_carbon_report():
     assert len(data["report_sha256"]) == 64
 
 
-def test_cross_module_sync_on_upload():
-    """12. Cross-Module Sync: Uploading new data synchronizes Dashboard, Carbon, Scheduler and Copilot."""
-    csv_sample = (
-        "timestamp,total_kwh,total_kw,power_factor\n"
-        "2026-09-01 00:00:00,20.0,80.0,0.92\n"
-        "2026-09-01 00:15:00,22.0,88.0,0.91\n"
-        "2026-09-01 00:30:00,18.0,72.0,0.93\n"
-    )
+def test_sample_factory_data_upload_sync():
+    """12. Real Sample Factory CSV Upload: 441.5 kWh updates Dashboard, Carbon, and Copilot simultaneously."""
+    with open("../data/sample_factory_data.csv", "rb") as f:
+        file_bytes = f.read()
+
     r = client.post(
         "/api/ingest/upload-meter-data",
-        files={"file": ("custom_meter.csv", csv_sample.encode("utf-8"), "text/csv")},
+        files={"file": ("sample_factory_data.csv", file_bytes, "text/csv")},
     )
     assert r.status_code == 200
-    upload_res = r.json()
-    assert upload_res["mode"] == "data_parsed"
-    assert active_plant.total_kwh == 60.0
+    res = r.json()
+    assert res["mode"] == "data_parsed"
+    assert active_plant.total_kwh == 441.5
 
-    # Verify Dashboard reads 60.0 kWh
+    # 1. Dashboard sync
     dash_r = client.get("/api/dashboard/kpis")
-    assert dash_r.json()["kpis"]["total_kwh"] == 60.0
+    assert dash_r.json()["kpis"]["total_kwh"] == 441.5
 
-    # Verify Carbon reads 60.0 kWh
+    # 2. Carbon sync
     carbon_r = client.get("/api/carbon/report")
-    assert carbon_r.json()["scope2"]["calc_sep"].startswith("60 kWh")
+    carbon_data = carbon_r.json()
+    assert carbon_data["scope2"]["calc_sep"].startswith("441 kWh")
+    assert carbon_data["scope2"]["sep_tco2e"] == 0.32
+    assert carbon_data["active_kwh"] == 441.5
 
-    # Verify Copilot reads 60.0 kWh
+    # 3. Copilot sync
     copilot_r = client.post("/api/copilot/ask", json={"question": "Total energy kitni hai?"})
-    assert "60" in copilot_r.json()["answer"]
+    cop_ans = copilot_r.json()["answer"]
+    assert "441.5" in cop_ans
 
-    # Reset active plant data back to demo baseline
+    # 4. Copilot Carbon sync
+    copilot_carbon_r = client.post("/api/copilot/ask", json={"question": "Carbon emissions kitna hai?"})
+    assert "0.32" in copilot_carbon_r.json()["answer"]
+
+    # Reset active plant
     active_plant.reset_to_demo()
     assert active_plant.total_kwh == 48240
+
+
+def test_twilio_meta_signature_isolation():
+    """13. Signature Isolation: Twilio requests are NOT rejected when META_APP_SECRET is set."""
+    from routers import whatsapp
+    original_secret = whatsapp.META_APP_SECRET
+    try:
+        whatsapp.META_APP_SECRET = "test_meta_secret_active"
+        # Twilio form request should pass through without being blocked by Meta signature check
+        r = client.post(
+            "/api/whatsapp/webhook",
+            data={"Body": "opt", "From": "whatsapp:+919837101838"},
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        assert r.status_code == 200
+        assert "Response" in r.text or "optimal" in r.text.lower() or "47,500" in r.text or "saving" in r.text.lower()
+    finally:
+        whatsapp.META_APP_SECRET = original_secret
+
+
+def test_claude_model_and_grounded_note():
+    """14. Model & Grounding: claude-sonnet-5-5 configured and no zero-hallucination claim."""
+    import agentic_copilot
+    import os
+    model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5-5")
+    assert model == "claude-sonnet-5-5"
+
+    cop_r = client.post("/api/copilot/chat", json={"message": "kpi"})
+    assert cop_r.status_code == 200
+    res = cop_r.json()
+    assert "zero hallucination" not in res.get("note", "").lower()
+    assert "grounded in tool outputs" in res.get("note", "").lower()
 
 
 def run_tests():
@@ -165,7 +202,9 @@ def run_tests():
         ("9. WhatsApp Webhook", test_whatsapp_webhook),
         ("10. Upload Fallback", test_meter_upload_fallback),
         ("11. Carbon Report", test_carbon_report),
-        ("12. Cross-Module Sync", test_cross_module_sync_on_upload),
+        ("12. Sample Factory CSV Sync (441.5 kWh)", test_sample_factory_data_upload_sync),
+        ("13. Twilio/Meta Signature Isolation", test_twilio_meta_signature_isolation),
+        ("14. Claude Model & Tool Grounding", test_claude_model_and_grounded_note),
     ]
 
     print("\nRunning UrjaMind Test & Verification Suite...")

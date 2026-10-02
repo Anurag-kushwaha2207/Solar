@@ -10,6 +10,7 @@ Calls UrjaMind Agentic Copilot to generate verified, tool-grounded responses.
 """
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import logging
@@ -59,6 +60,22 @@ def verify_meta_signature(raw_body: bytes, signature_header: Optional[str]) -> b
     return hmac.compare_digest(expected_hash, received_hash)
 
 
+def verify_twilio_signature(url: str, params: Dict[str, str], signature_header: Optional[str]) -> bool:
+    """Verify X-Twilio-Signature for Twilio webhook requests."""
+    if not TWILIO_AUTH_TOKEN:
+        return True  # If no Twilio auth token configured, pass
+    if not signature_header:
+        return False
+    # Standard Twilio signature calculation:
+    # URL string + sorted parameter keys and values concatenated
+    data_to_sign = url
+    for key in sorted(params.keys()):
+        data_to_sign += f"{key}{params[key]}"
+    expected_mac = hmac.new(TWILIO_AUTH_TOKEN.encode("utf-8"), data_to_sign.encode("utf-8"), hashlib.sha1).digest()
+    expected_sig = base64.b64encode(expected_mac).decode("utf-8")
+    return hmac.compare_digest(expected_sig, signature_header)
+
+
 class DirectWhatsAppMessage(BaseModel):
     message: str
     from_number: Optional[str] = "+919837101838"
@@ -93,31 +110,43 @@ async def verify_meta_webhook(
 async def receive_whatsapp_message(request: Request):
     """
     Handles incoming messages from Meta WhatsApp Cloud API or Twilio Sandbox.
-    Validates optional signatures, executes Agentic Copilot, and returns safe response.
+    Validates provider-specific signatures (Meta X-Hub-Signature or Twilio X-Twilio-Signature),
+    executes Agentic Copilot, and returns safe response.
     """
     raw_body = await request.body()
-
-    # Meta signature validation if secret is set
-    meta_sig = request.headers.get("x-hub-signature-256")
-    if META_APP_SECRET and not verify_meta_signature(raw_body, meta_sig):
-        raise HTTPException(status_code=401, detail="Invalid Meta signature")
-
     content_type = request.headers.get("content-type", "")
     incoming_text = ""
     sender_number = "unknown"
+    is_twilio = "application/x-www-form-urlencoded" in content_type or bool(request.headers.get("x-twilio-signature"))
 
     # 1. Handle Twilio Sandbox (application/x-www-form-urlencoded)
-    if "application/x-www-form-urlencoded" in content_type:
+    if is_twilio:
         form_data = await request.form()
+        twilio_sig = request.headers.get("x-twilio-signature")
+        if TWILIO_AUTH_TOKEN:
+            url = str(request.url)
+            params = {k: str(v) for k, v in form_data.items()}
+            if not verify_twilio_signature(url, params, twilio_sig):
+                raise HTTPException(status_code=401, detail="Invalid Twilio signature")
+
         incoming_text = str(form_data.get("Body", "")).strip()
         sender_number = str(form_data.get("From", "unknown"))
 
     # 2. Handle Meta WhatsApp Cloud API or Direct JSON
     else:
+        meta_sig = request.headers.get("x-hub-signature-256")
+        if meta_sig and META_APP_SECRET and not verify_meta_signature(raw_body, meta_sig):
+            raise HTTPException(status_code=401, detail="Invalid Meta signature")
+
         try:
             payload = await request.json()
         except Exception:
             payload = {}
+
+        # If it's a Meta Cloud API webhook delivery (has 'entry') and secret is configured, require signature
+        if "entry" in payload and META_APP_SECRET:
+            if not verify_meta_signature(raw_body, meta_sig):
+                raise HTTPException(status_code=401, detail="Invalid Meta signature")
 
         # Meta Cloud API payload format:
         # entry[0].changes[0].value.messages[0].text.body

@@ -35,7 +35,7 @@ async def chat(msg: ChatMessage):
         "tool_used": result.get("tool_called"),
         "tools_available": list(TOOL_REGISTRY.keys()),
         "language": msg.language,
-        "note": "Answers are synthesized strictly from executed analytical tools with zero hallucination.",
+        "note": "Answers are grounded in tool outputs.",
     }
 
 

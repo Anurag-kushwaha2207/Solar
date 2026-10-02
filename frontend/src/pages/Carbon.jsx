@@ -81,7 +81,14 @@ export default function Carbon() {
         <div className="carbon-header">
           <div>
             <h1 className="section-title">🌿 GHG Carbon Report</h1>
-            <p style={{color:'var(--text2)',marginTop:6,fontSize:13}}>{report.plant} · {report.period} · GHG Protocol Corporate Standard</p>
+            <p style={{color:'var(--text2)',marginTop:6,fontSize:13}}>
+              {report.plant} · {report.period} · GHG Protocol Corporate Standard
+              {report.data_source && report.data_source !== 'demo_baseline' && (
+                <span className="badge badge-green" style={{marginLeft:10}}>
+                  🟢 Active Data: {report.active_kwh ? `${report.active_kwh.toLocaleString()} kWh` : ''} ({report.filename || 'uploaded'})
+                </span>
+              )}
+            </p>
           </div>
           <div style={{display:'flex',gap:10}}>
             <button className="btn btn-green" onClick={()=>toast.success('📄 PDF report exported!')}>📄 Export PDF</button>
@@ -99,9 +106,9 @@ export default function Carbon() {
           </div>
           <div className="carbon-kpi-card" style={{'--accent':'var(--amber)'}}>
             <div className="ckpi-icon">⚡</div>
-            <div className="ckpi-val">{scope2.total_tco2e}</div>
-            <div className="ckpi-label">Scope 2 — Electricity</div>
-            <div className="ckpi-sub">EF: {scope2.emission_factor} kgCO₂/kWh · CEA 2023</div>
+            <div className="ckpi-val">{scope2.sep_tco2e !== undefined ? scope2.sep_tco2e : scope2.total_tco2e}</div>
+            <div className="ckpi-label">Scope 2 — Electricity (Active Month)</div>
+            <div className="ckpi-sub">{scope2.calc_sep || `EF: ${scope2.emission_factor} kgCO₂/kWh`}</div>
           </div>
           <div className="carbon-kpi-card" style={{'--accent':'var(--green)'}}>
             <div className="ckpi-icon">♻️</div>

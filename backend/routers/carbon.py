@@ -108,13 +108,16 @@ async def get_report(plant_id: int = 1):
             },
         ],
         "audit_trail": [
-            {"action": "DISCOM interval data ingested",   "detail": f"{SEP_TOTAL_KWH:,} kWh · 15-min · {MONTHS_6[-1]} 2026"},
-            {"action": "Scope 2 calculated",              "detail": f"{SEP_TOTAL_KWH:,} × {CEA_EMISSION_FACTOR_KG_PER_KWH} ÷ 1000 = {SEP_SCOPE2_TCO2E} tCO₂e"},
+            {"action": "Plant interval data ingested",   "detail": f"{int(current_kwh):,} kWh · {active_plant.source} ({active_plant.filename})"},
+            {"action": "Scope 2 calculated",              "detail": f"{int(current_kwh):,} × {CEA_EMISSION_FACTOR_KG_PER_KWH} ÷ 1000 = {sep_scope2} tCO₂e"},
             {"action": "Scope 1 — diesel log entered",    "detail": f"Sep: {SEP_SCOPE1_TCO2E} tCO₂e"},
             {"action": "Emission factor source",          "detail": EF_SOURCE},
             {"action": "Internal verification status",   "detail": "Phase 1 pipeline — internal audit trail verified"},
             {"action": "Cryptographic signature",        "detail": f"SHA-256: {report_sha256[:16]}...{report_sha256[-8:]} (verifiable payload digest)"},
         ],
+        "data_source": active_plant.source,
+        "filename": active_plant.filename,
+        "active_kwh": current_kwh,
         "buyer_readiness": {
             "scope2_location_based":    True,
             "scope1_direct":            True,
@@ -129,10 +132,15 @@ async def get_report(plant_id: int = 1):
 
 @router.get("/intensity-trend")
 async def intensity_trend():
+    current_kwh = active_plant.total_kwh
+    sep_scope2 = round(current_kwh * CEA_EMISSION_FACTOR_KG_PER_KWH / 1000, 2)
+    monthly_scope2 = list(MONTHLY_SCOPE2)
+    monthly_scope2[-1] = sep_scope2
+
     monthly_kg = [9_400, 9_800, 10_600, 11_200, 11_800, SEP_PRODUCTION_KG]
     intensities = [
         round((s1 + s2) * 1000 / kg, 3)
-        for s1, s2, kg in zip(MONTHLY_SCOPE1, MONTHLY_SCOPE2, monthly_kg)
+        for s1, s2, kg in zip(MONTHLY_SCOPE1, monthly_scope2, monthly_kg)
     ]
     return {
         "months":    MONTHS_6,

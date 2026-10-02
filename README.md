@@ -25,7 +25,7 @@ UrjaMind helps Indian SMEs reduce industrial electricity bills and ToD peak surc
 | **Data Ingestion** | ✅ Working | DISCOM interval CSV, bill uploads, production logs handled via FastAPI endpoints. |
 | **Machine NILM** | 🔬 Phase 1 | Physics-informed equipment register breakdown (sums strictly to 48,240 kWh). Seq2Point/Transformer training on IMDELD/HIPE is Phase 2. |
 | **Anomaly Detection** | 🔬 Phase 1 | Physics rules (e.g. 4.2 kW compressor idle draw during non-production night shifts) + real measured PF (0.870). LSTM-VAE is Phase 2. |
-| **Copilot** | 🔬 Phase 1 | Intent-matching NLP engine with tool-grounded responses locked to `constants.py` (zero hallucination). LLM RAG is Phase 2. |
+| **Copilot** | 🔬 Phase 1 | Multi-tool agentic engine (answers are grounded in tool outputs, strictly executing verified analytical solvers). |
 
 ---
 
