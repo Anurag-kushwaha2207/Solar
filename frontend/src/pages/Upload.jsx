@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { loadDemoData, uploadBill, uploadMeter, uploadProduction, uploadEquipment } from '../api'
+import { uploadBillDocument, savePlantRecord } from '../firebase'
 import './Upload.css'
 
 const STEPS = ['Upload Data', 'Dashboard', 'Scheduler', 'Carbon Report']
@@ -18,8 +19,22 @@ function DropZone({ icon, title, desc, formats, required, onUpload, uploaded, id
       fd.append('file', file)
       fd.append('plant_id', '1')
       const res = await onUpload(fd)
-      if (res?.mode === 'data_parsed') {
-        toast.success(`✅ ${title} parsed (${res.rows || 'data'} rows updated active analytics)!`)
+
+      // Parallel Firebase Storage upload & Firestore record
+      uploadBillDocument(file, 'plant_1').then(fbRes => {
+        if (fbRes.success) {
+          savePlantRecord('plant_1', {
+            latestFileUrl: fbRes.downloadUrl,
+            fileName: file.name,
+            fileType: title,
+            extracted: res?.extracted || null,
+          })
+          toast.success(`☁️ Document securely stored in Firebase Storage!`)
+        }
+      })
+
+      if (res?.mode === 'data_parsed' || res?.mode === 'bill_ocr_parsed') {
+        toast.success(`✅ ${title} parsed (${res.rows_detected || 'bill metrics'} updated live analytics)!`)
       } else {
         toast.success(`ℹ️ ${title} received — demo baseline active`)
       }
@@ -29,6 +44,7 @@ function DropZone({ icon, title, desc, formats, required, onUpload, uploaded, id
       setLoading(false)
     }
   }
+
 
   return (
     <div

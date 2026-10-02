@@ -6,7 +6,9 @@ import {
 } from 'recharts'
 import toast from 'react-hot-toast'
 import { fetchKPIs, fetchMachines, fetchBaseline, fetchAnomalies, fetchNILM, chatWithCopilot, fetchQuickQs, resolveAnomaly } from '../api'
+import { logCopilotChat } from '../firebase'
 import './Dashboard.css'
+
 
 const COLORS = ['#3b9eff','#f6a623','#38d9a9','#a78bfa','#fb7185']
 const SEV_COLOR = { high:'var(--red)', medium:'var(--amber)', low:'var(--blue-light)' }
@@ -82,6 +84,7 @@ function Copilot() {
   useEffect(() => { endRef.current?.scrollIntoView({behavior:'smooth'}) }, [msgs])
 
   async function send(text) {
+
     if (!text.trim() || loading) return
     setMsgs(m => [...m, {role:'user', content:text}])
     setInput('')
@@ -89,10 +92,13 @@ function Copilot() {
     try {
       const res = await chatWithCopilot(text)
       setMsgs(m => [...m, {role:'bot', content:res.content}])
+      // Log to Firestore in background
+      logCopilotChat('plant_1', text, res.content, res.tool_called)
     } catch {
-      setMsgs(m => [...m, {role:'bot', content:'Connection error — backend chal raha hai? `cd backend && uvicorn main:app --reload`'}])
+      setMsgs(m => [...m, {role:'bot', content:'Connection error — backend chal raha hai? `cd backend && python -m uvicorn main:app --reload --port 8000`'}])
     } finally { setLoading(false) }
   }
+
 
   function renderContent(text) {
     return text.split('\n').map((line, i) => {
