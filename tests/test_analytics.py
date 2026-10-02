@@ -52,6 +52,8 @@ class AnalyticsTests(unittest.TestCase):
 
     def test_summary_rejects_non_numeric_measurements(self):
         invalid_data = self.data.copy()
+        # Cast to object dtype first so pandas accepts a string value
+        invalid_data["total_kwh"] = invalid_data["total_kwh"].astype(object)
         invalid_data.loc[0, "total_kwh"] = "not-a-number"
 
         with self.assertRaisesRegex(ValueError, "total_kwh"):

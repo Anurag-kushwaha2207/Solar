@@ -1,143 +1,159 @@
-"""LLM Copilot router — rule-based + tool-grounded responses (no hallucination)"""
+"""
+LLM Copilot router — HONEST version
+- Clearly labeled as rule-based intent matching (not LLM)
+- All numbers from constants.py (consistent)
+- Confidence score removed (it was fake)
+"""
 from fastapi import APIRouter
 from pydantic import BaseModel
-from demo_data import get_demo_kpis, get_demo_anomalies, get_demo_carbon
 import re
+from constants import (
+    SEP_TOTAL_KWH, SEP_AVG_PF, SEP_PF_PENALTY_INR, SEP_TOTAL_AMOUNT_INR,
+    SEP_SEC_ENERGY, BASELINE_SEC_ENERGY, SEP_DEVIATION_PCT, SEP_PRODUCTION_KG,
+    ANOMALY_SAVING_COMPRESSOR_INR, ANOMALY_SAVING_FURNACE_INR,
+    ANOMALY_SAVING_PRESS3_INR, ANOMALY_SAVING_PF_INR, TOTAL_ANOMALY_SAVING_INR,
+    SEP_SCOPE2_TCO2E, SEP_SCOPE1_TCO2E, SEP_EMISSION_INTENSITY,
+    PROJECTED_SAVING_TCO2E_YEAR, COPILOT_TYPE, COPILOT_DESC,
+)
 
 router = APIRouter()
+
 
 class ChatMessage(BaseModel):
     message: str
     plant_id: int = 1
     language: str = "hinglish"
 
-# ── Tool functions (grounded in real data) ─────────────────────────────────
+
+# ── Tool functions — numbers from constants only ───────────────────────────
 
 def tool_energy_summary():
-    kpis = get_demo_kpis()
     return (
-        f"Is mahine total consumption: {kpis['total_kwh']:,.0f} kWh. "
-        f"Specific energy: {kpis['specific_energy']} kWh/kg (baseline 3.42 kWh/kg se "
-        f"{round((kpis['specific_energy']-3.42)/3.42*100,1)}% zyada). "
-        f"Power factor: {kpis['avg_power_factor']}. "
-        f"PF penalty: ₹{kpis['pf_penalty_inr']:,.0f}. "
-        f"Total bill: ₹{kpis['total_cost_inr']:,.0f}."
+        f"Sep 2026 total: **{SEP_TOTAL_KWH:,} kWh** · Bill: **₹{SEP_TOTAL_AMOUNT_INR:,}**\n"
+        f"Specific energy: **{SEP_SEC_ENERGY} kWh/kg** (baseline {BASELINE_SEC_ENERGY}, "
+        f"+{SEP_DEVIATION_PCT}% deviation)\n"
+        f"Avg PF: **{SEP_AVG_PF}** · PF Penalty: **₹{SEP_PF_PENALTY_INR:,}**"
     )
 
-def tool_top_anomaly():
-    alerts = get_demo_anomalies()
-    a = alerts[0]
+
+def tool_anomaly_summary():
+    total = TOTAL_ANOMALY_SAVING_INR
     return (
-        f"Sabse badi problem: {a['title']}. "
-        f"Potential saving: ₹{a['potential_saving_inr']:,}/month. "
-        f"Action: {a['action']}"
+        f"4 anomalies detected (physics-simulation based):\n\n"
+        f"🔴 Compressor idle waste → **₹{ANOMALY_SAVING_COMPRESSOR_INR:,}/month**\n"
+        f"🟡 Furnace peak tariff → **₹{ANOMALY_SAVING_FURNACE_INR:,}/month** (ToD saving)\n"
+        f"🔵 Press #3 degradation → **₹{ANOMALY_SAVING_PRESS3_INR:,}/month**\n"
+        f"🔵 PF drop → **₹{ANOMALY_SAVING_PF_INR:,}/month**\n\n"
+        f"Total potential: **₹{total:,}/month**\n"
+        f"⚠ Note: Anomalies are from physics simulation, not trained ML model."
     )
 
-def tool_saving_estimate():
-    alerts = get_demo_anomalies()
-    total = sum(a["potential_saving_inr"] for a in alerts)
+
+def tool_carbon():
     return (
-        f"Kul 4 anomalies detect hui hain. "
-        f"Total potential saving: ₹{total:,}/month. "
-        f"Breakdown: Compressor idle ₹8,400 + Furnace tariff shift ₹10,200 + "
-        f"PF correction ₹3,200 + Press maintenance ₹2,800."
+        f"Sep 2026 GHG Emissions:\n"
+        f"• Scope 2 (electricity): **{SEP_SCOPE2_TCO2E} tCO₂e** "
+        f"({SEP_TOTAL_KWH:,} kWh × 0.716 kg/kWh)\n"
+        f"• Scope 1 (diesel/fuel): **{SEP_SCOPE1_TCO2E} tCO₂e**\n"
+        f"• Emission intensity: **{SEP_EMISSION_INTENSITY} kgCO₂e/kg** casting\n"
+        f"• Projected annual saving: **{PROJECTED_SAVING_TCO2E_YEAR} tCO₂e/year**\n"
+        f"Source: CEA India 2023-24 (0.716 kgCO₂/kWh, Western Grid)"
     )
 
-def tool_carbon_summary():
-    c = get_demo_carbon()
-    return (
-        f"Sep 2026 mein total emissions: Scope 2 = {c['scope2_monthly'][-1]} tCO₂e "
-        f"(grid electricity), Scope 1 = {c['scope1_monthly'][-1]} tCO₂e (fuel). "
-        f"Emission intensity: {c['emission_intensity']} kgCO₂e/kg casting. "
-        f"UrjaMind ke interventions se projected saving: {c['projected_saving_tco2e']} tCO₂e/year."
-    )
 
-# ── Intent matching ────────────────────────────────────────────────────────
+# ── Intent → response ─────────────────────────────────────────────────────
 
-RESPONSES = {
-    r"bill.*kyun.*badh|consumption.*zyada|bill.*increase": lambda: (
-        "Bill badhne ke 3 main reasons hain (data-verified):\n\n"
-        "1. 🔴 **Compressor idle raat mein** — 22 nights detect hua, extra ₹8,400/month\n"
-        "2. 🟡 **Furnace peak tariff hours mein** — 6-10 PM @ ₹8.20/kWh, ₹10,200/month extra\n"
-        "3. 🔵 **Press #3 degradation** — specific energy 40% badh gayi\n\n"
-        f"Verified numbers: {tool_energy_summary()}"
-    ),
-    r"compressor|idle|raat|night": lambda: (
-        "Compressor Anomaly (Confidence: 94%):\n\n"
-        "🔴 Air compressor raat 11 PM se 3 AM tak chal raha hai jab production ZERO hai.\n"
-        "Idle draw: 4.2 kW × ~4 hours × 22 nights = **~370 kWh/month waste**\n"
-        "Saving: **₹8,400/month** (₹4.50/kWh off-peak rate pe bhi)\n\n"
-        "✅ Fix: Timer-based auto-shutoff lagao — one-time cost ₹2,000, payback: 1 week."
-    ),
-    r"power factor|pf|capacitor": lambda: (
-        f"Power Factor Analysis:\n\n"
-        f"📊 Current PF: {get_demo_kpis()['avg_power_factor']} (target ≥ 0.90)\n"
-        f"💸 Monthly PF penalty: ₹{get_demo_kpis()['pf_penalty_inr']:,.0f}\n\n"
-        "Fix: Capacitor bank tuning by electrician.\n"
-        "One-time cost: ₹8,000–15,000 | Payback: 3–5 months | Annual saving: ₹38,400"
-    ),
-    r"schedule|tariff|shift|off.?peak|tod": lambda: (
-        "Tariff Optimization (CP-SAT result):\n\n"
-        "📅 Furnace melting ko peak hours (6–10 PM @ ₹8.20) se off-peak (10 PM–6 AM @ ₹4.50) shift karo.\n"
-        "Saving: **₹10,200/month** — production loss: ZERO\n\n"
-        "Scheduler tab mein jaao → 'Run Optimizer' dabao → naya schedule download karo."
-    ),
-    r"carbon|co2|emission|scope|ghg|cbam": lambda: tool_carbon_summary(),
-    r"saving|kitna|bacha|benefit|roi": lambda: tool_saving_estimate(),
-    r"press|machine|motor|degradation|maintenance": lambda: (
-        "Press #3 Degradation Alert (Confidence: 81%):\n\n"
-        "📉 Specific energy: 0.8 kWh/cycle → 1.12 kWh/cycle over 6 weeks\n"
-        "🔧 Root cause: Bearing wear suspected\n"
-        "💰 Extra cost: ₹2,800/month\n\n"
-        "✅ Fix: Bearing inspection + greasing — cost ₹3,500, payback: 1.25 months"
-    ),
-    r"kya|summary|overview|sab|total|batao": lambda: (
-        f"Plant Summary — Rajkot Foundry, Sep 2026:\n\n"
-        f"{tool_energy_summary()}\n\n"
-        f"🚨 4 anomalies detected | Total saving potential: ₹22,800/month\n"
-        f"📅 Schedule optimization: ₹18,400/month additional\n"
-        f"🌿 Carbon: 35.4 tCO₂e this month | Intensity: 2.74 kgCO₂e/kg"
-    ),
-}
+PATTERNS = [
+    (r"bill.*kyun.*badh|consumption.*zyada|bill.*increase|why.*bill",
+     lambda: (
+         f"Bill {SEP_DEVIATION_PCT}% above baseline. 3 main reasons:\n\n"
+         f"1. 🔴 Compressor raat ko idle chal raha hai → **₹{ANOMALY_SAVING_COMPRESSOR_INR:,}/month** waste\n"
+         f"2. 🟡 Furnace peak hours mein → **₹{ANOMALY_SAVING_FURNACE_INR:,}/month** extra\n"
+         f"3. 🔵 Press #3 degradation → **₹{ANOMALY_SAVING_PRESS3_INR:,}/month**\n\n"
+         + tool_energy_summary()
+     )),
+    (r"compressor|idle|raat|night|4\.2",
+     lambda: (
+         "**Compressor Idle Waste (Simulated)**\n\n"
+         f"Physics model: 4.2 kW idle draw × ~4h × 22 nights = **370 kWh/month**\n"
+         f"At off-peak ₹4.50/kWh → **₹{ANOMALY_SAVING_COMPRESSOR_INR:,}/month**\n\n"
+         "✅ Fix: Auto-shutoff timer (₹2,000 one-time → payback: 1 week)\n"
+         "⚠ Confirm with actual meter reading before acting."
+     )),
+    (r"power factor|pf|capacitor",
+     lambda: (
+         f"**Power Factor Analysis**\n\n"
+         f"Current PF: **{SEP_AVG_PF}** (target ≥ 0.90)\n"
+         f"Monthly PF penalty: **₹{SEP_PF_PENALTY_INR:,}**\n\n"
+         f"Fix: Capacitor bank tuning (₹8,000–15,000 one-time)\n"
+         f"Estimated saving: **₹{ANOMALY_SAVING_PF_INR:,}/month**\n"
+         "Payback: 6–12 months"
+     )),
+    (r"schedul|tariff|shift|off.?peak|tod|furnace",
+     lambda: (
+         "**Tariff Optimisation (CP-SAT)**\n\n"
+         "Furnace melting ko peak (₹8.20) se off-peak (₹4.50) mein shift karo.\n"
+         f"Estimated saving: **₹{ANOMALY_SAVING_FURNACE_INR:,}/month** (tariff only, same kWh)\n\n"
+         "Scheduler tab mein 'Run Optimizer' dabao → real CP-SAT result aayega."
+     )),
+    (r"carbon|co2|emission|scope|ghg|cbam",
+     lambda: tool_carbon()),
+    (r"saving|kitna|bacha|total|benefit",
+     lambda: tool_anomaly_summary()),
+    (r"press|degradation|bearing|maintenance",
+     lambda: (
+         f"**Press #3 Degradation (Simulated)**\n\n"
+         "Physics model: specific energy 0.8 → 1.12 kWh/cycle (+40% over 6 weeks)\n"
+         f"Extra cost: **₹{ANOMALY_SAVING_PRESS3_INR:,}/month**\n\n"
+         "✅ Fix: Bearing inspection + greasing (₹3,500, payback: 1.25 months)\n"
+         "⚠ Verify with actual ampere readings."
+     )),
+    (r"kya|summary|overview|sab|batao|hello|namaste",
+     lambda: (
+         "**Rajkot Foundry — Sep 2026 Summary**\n\n"
+         + tool_energy_summary() + "\n\n"
+         f"🚨 4 anomalies · Total saving: **₹{TOTAL_ANOMALY_SAVING_INR:,}/month**\n"
+         f"🌿 Carbon: **{SEP_SCOPE2_TCO2E + SEP_SCOPE1_TCO2E:.2f} tCO₂e** this month"
+     )),
+]
+
 
 @router.post("/chat")
 async def chat(msg: ChatMessage):
     text = msg.message.lower().strip()
-    
-    # Match intent
-    response_text = None
-    for pattern, fn in RESPONSES.items():
+    response = None
+    for pattern, fn in PATTERNS:
         if re.search(pattern, text, re.IGNORECASE):
-            response_text = fn()
+            response = fn()
             break
-    
-    if not response_text:
-        response_text = (
-            "Yeh sawaal samajh nahi aaya, lekin main kuch common sawaalon ka jawab de sakta hun:\n\n"
-            "• 'Bill kyun badha?' — energy waste analysis\n"
-            "• 'Compressor problem?' — idle waste detail\n"
-            "• 'Schedule optimize karo' — tariff scheduling\n"
-            "• 'Carbon report' — GHG emissions\n"
-            "• 'Total saving kitna?' — saving summary\n\n"
-            "⚠️ Note: Main sirf verified data se jawab deta hun — koi guess nahi."
+
+    if not response:
+        response = (
+            "Yeh specific sawaal samajh nahi aaya. Try karo:\n\n"
+            "• 'Bill kyun badha?' · 'Compressor problem?' · 'Power factor?'\n"
+            "• 'Schedule optimize karo' · 'Carbon report' · 'Total saving?'\n\n"
+            f"ℹ️ Main ek **rule-based engine** hun ({COPILOT_TYPE}), "
+            "sirf verified simulation data se jawab deta hun."
         )
 
     return {
-        "role": "assistant",
-        "content": response_text,
-        "data_source": "UrjaMind verified analytics — no LLM hallucination",
-        "confidence": 0.95,
-        "tools_called": ["get_energy_summary", "get_anomalies"],
-        "language": msg.language,
+        "role":        "assistant",
+        "content":     response,
+        "copilot_type": COPILOT_TYPE,
+        "copilot_desc": COPILOT_DESC,
+        "data_source": "constants.py (single source of truth)",
+        "language":    msg.language,
+        "note":        "Numbers are from physics simulation, not trained ML model.",
     }
+
 
 @router.get("/quick-questions")
 async def quick_questions():
     return [
-        "Pichhle hafte bill kyun badha? 📈",
-        "Kaun si machine sabse zyada kha rahi hai?",
-        "Power factor fix karne par kitna bachega?",
+        "Bill kyun badha? 📈",
+        "Compressor raat ko kyon chal raha hai?",
+        f"Power factor {SEP_AVG_PF} — kya karna chahiye?",
         "Schedule optimize karo — off-peak mein shift karo",
         "Carbon report — Scope 1 aur 2 kitna hai?",
-        "Total monthly saving kitna ho sakta hai?",
+        f"Total monthly saving kitna ho sakta hai? (Hint: ₹{TOTAL_ANOMALY_SAVING_INR:,})",
     ]

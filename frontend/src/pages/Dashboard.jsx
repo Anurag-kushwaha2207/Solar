@@ -153,23 +153,25 @@ export default function Dashboard() {
         setAlerts(a.alerts); setNilm(n)
       })
       .catch(() => {
-        // Fallback demo data
-        setKpis({ kpis:{total_kwh:48240,specific_energy:3.84,avg_power_factor:0.87,pf_penalty_inr:3200,total_cost_inr:298720}, deviation_pct:12.3 })
+        // Fallback demo data — consistent with backend/constants.py
+        setKpis({ kpis:{total_kwh:48240,specific_energy:3.834,avg_power_factor:0.870,pf_penalty_inr:3200,md_penalty_inr:0,total_amount_inr:296500}, deviation_pct:12.1 })
         setMachines([
           {machine:'Induction Furnace (500 kg)',kwh:21400,share_pct:44.4,avg_pf:0.91,status:'normal'},
-          {machine:'Air Compressor (75 kW)',kwh:8900,share_pct:18.5,avg_pf:0.85,status:'idle_waste'},
-          {machine:'Hydraulic Press ×3',kwh:6200,share_pct:12.9,avg_pf:0.89,status:'degradation'},
-          {machine:'Fettling Machine ×6',kwh:4800,share_pct:10.0,avg_pf:0.84,status:'normal'},
-          {machine:'Lighting & HVAC',kwh:6940,share_pct:14.4,avg_pf:0.78,status:'pf_issue'},
+          {machine:'Air Compressor (75 kW)',     kwh:8900, share_pct:18.5,avg_pf:0.85,status:'idle_waste'},
+          {machine:'Hydraulic Press ×3',         kwh:6200, share_pct:12.9,avg_pf:0.88,status:'degradation'},
+          {machine:'Fettling Machine ×6',        kwh:4800, share_pct:9.9, avg_pf:0.84,status:'normal'},
+          {machine:'Lighting & HVAC',            kwh:6940, share_pct:14.4,avg_pf:0.80,status:'pf_issue'},
         ])
-        setBaseline({months:['Apr','May','Jun','Jul','Aug','Sep'],baseline_kwh_per_kg:[3.42,3.45,3.40,3.48,3.44,3.42],actual_kwh_per_kg:[3.45,3.50,3.62,3.75,3.80,3.84]})
+        setBaseline({months:['Apr','May','Jun','Jul','Aug','Sep'],
+          baseline_kwh_per_kg:[3.42,3.42,3.42,3.42,3.42,3.42],
+          actual_kwh_per_kg:  [3.45,3.50,3.62,3.75,3.80,3.83]})
         setAlerts([
-          {id:1,title:'Idle Compressor — Raat 11PM–3AM',description:'4.2 kW idle draw detected 22 nights.',potential_saving_inr:8400,severity:'high'},
-          {id:2,title:'Furnace — Peak Tariff Exposure',description:'Melting during ₹8.20/kWh hours.',potential_saving_inr:10200,severity:'medium'},
-          {id:3,title:'Press #3 Degradation',description:'Specific energy +40% over 6 weeks.',potential_saving_inr:2800,severity:'medium'},
-          {id:4,title:'Power Factor Drop',description:'PF 0.87 → penalty ₹3,200/month.',potential_saving_inr:1400,severity:'low'},
+          {id:1,title:'Idle Compressor — Raat 11PM–3AM',description:'Physics model: 4.2 kW idle × ~4h × 22 nights = 370 kWh waste.',potential_saving_inr:8400,severity:'high'},
+          {id:2,title:'Furnace — Peak Tariff (₹8.20/kWh)',description:'Shift to off-peak ₹4.50 → same kWh, lower cost.',potential_saving_inr:10200,severity:'medium'},
+          {id:3,title:'Press #3 Motor Degradation',description:'Specific energy trending +0.3%/day (physics sim).',potential_saving_inr:2800,severity:'medium'},
+          {id:4,title:'Power Factor Drop — PF 0.870',description:'DISCOM measured PF → penalty ₹3,200/month.',potential_saving_inr:1200,severity:'low'},
         ])
-        setNilm({r2_overall:0.891,nde:0.142,model:'Transformer-NILM'})
+        setNilm({status:'SIMULATED', model:'Physics simulation (Phase 1). ML training planned Phase 2.'})
       })
       .finally(() => setLoading(false))
   }, [])
@@ -195,8 +197,15 @@ export default function Dashboard() {
               <h1 className="section-title">Energy Intelligence Dashboard</h1>
               <p style={{color:'var(--text2)',fontSize:13,marginTop:4}}>
                 Rajkot Foundry · Sep 2026 ·{' '}
-                {nilm && <span className="badge badge-green">🎯 NILM R²={nilm.r2_overall}</span>}
+                {nilm && (
+                  <span className={`badge ${nilm.status==='SIMULATED'?'badge-amber':'badge-green'}`}>
+                    {nilm.status==='SIMULATED' ? '🔬 Physics Simulation (Phase 1)' : '🎯 ML Model Active'}
+                  </span>
+                )}
               </p>
+              <div style={{marginTop:6,padding:'6px 10px',background:'rgba(246,166,35,0.08)',border:'1px solid rgba(246,166,35,0.25)',borderRadius:8,fontSize:11,color:'var(--amber)',display:'inline-block'}}>
+                ⚠ Demo: Physics simulation data — not from trained ML model
+              </div>
             </div>
             <div className="time-tabs">
               {['Day','Week','Month'].map(t => (
@@ -212,10 +221,10 @@ export default function Dashboard() {
             </div>
           ) : kpis && (
             <div className="kpi-grid">
-              <KpiCard label="Total Consumption" value={kpis.kpis.total_kwh.toLocaleString()} unit="kWh this month" delta="↑ 9.2% vs last month" deltaType="up" icon="⚡" color="blue" />
-              <KpiCard label="Specific Energy" value={kpis.kpis.specific_energy} unit="kWh per kg casting" delta={`⚠ ${kpis.deviation_pct}% above baseline`} deltaType="warn" icon="🏭" color="amber" />
-              <KpiCard label="Power Factor" value={kpis.kpis.avg_power_factor} unit="Avg this month" delta={`PF Penalty ₹${kpis.kpis.pf_penalty_inr.toLocaleString()}`} deltaType="warn" icon="📊" color="green" />
-              <KpiCard label="Total Bill" value={`₹${(kpis.kpis.total_cost_inr/1000).toFixed(0)}K`} unit="Sep 2026" delta="↑ MD penalty risk" deltaType="up" icon="💸" color="red" />
+              <KpiCard label="Total Consumption" value={kpis.kpis.total_kwh.toLocaleString()} unit="kWh this month" delta="↑ 12.1% above baseline" deltaType="up" icon="⚡" color="blue" />
+              <KpiCard label="Specific Energy" value={kpis.kpis.specific_energy} unit="kWh per kg casting" delta={`⚠ ${kpis.deviation_pct}% above baseline (3.42)`} deltaType="warn" icon="🏷" color="amber" />
+              <KpiCard label="Power Factor" value={kpis.kpis.avg_power_factor} unit="Avg this month" delta={`PF Penalty ₹${(kpis.kpis.pf_penalty_inr||0).toLocaleString()}`} deltaType="warn" icon="📊" color="green" />
+              <KpiCard label="Total Bill" value={`₹${((kpis.kpis.total_amount_inr||kpis.kpis.total_cost_inr||296500)/1000).toFixed(0)}K`} unit="Sep 2026" delta="₹6.08/kWh blended" deltaType="up" icon="💸" color="red" />
             </div>
           )}
 

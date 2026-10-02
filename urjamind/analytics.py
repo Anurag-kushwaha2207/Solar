@@ -161,7 +161,11 @@ def generate_schedule(df: pd.DataFrame | None = None) -> List[Dict[str, object]]
     return schedule
 
 
-def compute_carbon(df: pd.DataFrame | None = None, grid_emission_factor_kg_per_kwh: float = 0.74) -> Dict[str, float]:
+def compute_carbon(df: pd.DataFrame | None = None, grid_emission_factor_kg_per_kwh: float = 0.716) -> Dict[str, float]:
+    """
+    Compute Scope 2 GHG emissions.
+    Default: 0.716 kgCO₂/kWh — CEA India 2023-24, Western Regional Grid (Gujarat).
+    """
     df = df if df is not None else load_sample_data()
     if df.empty:
         raise ValueError("No data available to calculate carbon emissions.")

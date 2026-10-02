@@ -6,13 +6,18 @@ pandas==2.2.2
 numpy==1.26.4
 scipy==1.13.0
 scikit-learn==1.4.2
-lightgbm==4.3.0
 python-dotenv==1.0.1
-httpx==0.27.0
 aiofiles==23.2.1
-Pillow==10.3.0
-python-jose==3.3.0
-passlib==1.7.4
 sqlalchemy==2.0.30
-databases[sqlite]==0.9.0
 aiosqlite==0.20.0
+
+# Real optimizer (Phase 1 — scheduler)
+ortools==9.15.6755
+
+# Planned Phase 2 additions (not yet in codebase)
+# torch==2.3.0            # NILM Transformer / Seq2Point
+# lightgbm==4.3.0         # Baseline regression
+# simpy==4.1.1            # Digital twin simulation
+# shap==0.45.0            # Explainability
+# paddleocr==2.7.3        # Bill OCR (image bills)
+# stable-baselines3==2.3.2 # PPO RL for scheduler

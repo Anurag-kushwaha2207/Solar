@@ -1,65 +1,87 @@
-"""NILM Disaggregation router"""
+"""
+NILM Disaggregation router — HONEST version
+Clearly labels results as physics-based simulation (Phase 1).
+Real ML training (IMDELD/HIPE) planned for Phase 2.
+"""
 from fastapi import APIRouter
-from demo_data import get_demo_machines, get_demo_df
-import numpy as np
+from constants import (
+    MACHINE_KWH, SEP_TOTAL_KWH,
+    NILM_STATUS, NILM_MODEL_DESC,
+    NILM_TARGET_R2_1SEC, NILM_TARGET_R2_15MIN, NILM_TARGET_R2_30MIN,
+)
 
 router = APIRouter()
 
 
 @router.get("/disaggregate")
-async def disaggregate(plant_id: int = 1, window_hours: int = 24):
+async def disaggregate(plant_id: int = 1):
     """
     NILM disaggregation result.
-    In production: Transformer/Seq2Point model inference.
-    In demo: physics-based synthetic data.
-    """
-    machines = get_demo_machines()
-    df = get_demo_df()
 
-    # Ablation-style confidence levels per machine
-    confidence_map = {
-        "Induction Furnace (500 kg)": 0.92,
-        "Air Compressor (75 kW)": 0.88,
-        "Hydraulic Press #1": 0.79,
-        "Hydraulic Press #2": 0.80,
-        "Hydraulic Press #3 (degraded)": 0.76,
-        "Fettling Machine ×6": 0.71,
-        "Lighting & HVAC": 0.83,
-    }
+    ⚠ PHASE 1 PROTOTYPE: Results are physics-based simulation,
+      NOT from a trained ML model. A Transformer/Seq2Point model
+      trained on IMDELD dataset is planned for Phase 2.
+    """
+    total = SEP_TOTAL_KWH
+    machine_results = []
+    for machine, kwh in MACHINE_KWH.items():
+        machine_results.append({
+            "machine":   machine,
+            "kwh":       kwh,
+            "share_pct": round(kwh / total * 100, 1),
+            "method":    "physics-simulation",
+            "confidence": None,   # No confidence score for simulated data
+        })
 
     return {
-        "model": "Transformer-NILM (pretrained on Digital Twin, fine-tuned on IMDELD)",
-        "data_tier": 2,
-        "resolution": "15-min",
-        "nde": 0.142,        # Normalized Disaggregation Error
-        "sae": 0.108,        # Signal Aggregate Error
-        "r2_overall": 0.891,
-        "machines": [
-            {**m, "confidence": confidence_map.get(m["machine"], 0.75)}
-            for m in machines
-        ],
-        "ablation": {
-            "real_data_only_r2":       0.71,
-            "real_plus_twin_r2":       0.84,
-            "real_plus_twin_aug_r2":   0.89,
-            "note": "Digital-twin pretraining adds +13 R² points at 15-min resolution"
+        "status":        NILM_STATUS,          # "SIMULATED"
+        "model":         NILM_MODEL_DESC,
+        "phase":         "Phase 1 Prototype",
+        "data_tier":     2,
+        "resolution":    "15-min",
+        "total_kwh":     total,
+        "machines":      machine_results,
+        "honest_note":   (
+            "These numbers come from a physics-based simulation "
+            "using equipment register duty cycles, NOT a trained NILM model. "
+            "ML training on IMDELD/HIPE is Phase 2 work."
+        ),
+        # Target metrics from literature (NOT our experiment results)
+        "literature_targets": {
+            "note": "From published papers — NOT our own experiment results",
+            "transformer_nilm_industrial_r2": "~0.89–0.94 (1-sec data, Bouzbita et al. 2024)",
+            "seq2point_15min_r2": "~0.71–0.87 (estimated with physical constraints)",
         },
-        "constraint_violations": 0,
+        "ablation_plan": {
+            "description": "Planned Phase 2 experiment on HIPE/IMDELD",
+            "datasets": ["HIPE (5-sec, electronics manufacturing)", "IMDELD (pelletizers, contactors, fans)"],
+            "resolutions_to_test": ["1-sec", "1-min", "15-min", "30-min"],
+            "status": "NOT YET EXECUTED",
+        },
         "physical_constraints": "sum_to_total=True, non_negative=True",
     }
 
 
 @router.get("/resolution-ablation")
 async def resolution_ablation():
-    """Show accuracy degradation at different temporal resolutions."""
+    """
+    Resolution vs accuracy table.
+    ⚠ Numbers marked as PLANNED TARGETS, not experiment results.
+    """
     return {
-        "description": "NILM accuracy vs data resolution — our key research contribution",
-        "results": [
-            {"resolution": "1-sec",  "r2": 0.94, "note": "Best case — high-freq meter"},
-            {"resolution": "1-min",  "r2": 0.89, "note": "Good — sub-meter"},
-            {"resolution": "15-min", "r2": 0.87, "note": "Our Tier 2 with twin + constraints"},
-            {"resolution": "30-min", "r2": 0.79, "note": "DISCOM standard — acceptable"},
-            {"resolution": "monthly","r2": None,  "note": "Tier 1 — statistical only"},
+        "status": "PLANNED — not yet executed",
+        "description": (
+            "This ablation will be run in Phase 2 on HIPE and IMDELD datasets. "
+            "Numbers below are TARGETS from literature, not our own results."
+        ),
+        "planned_experiment": [
+            {"resolution": "1-sec",   "source": "literature",  "target_r2": NILM_TARGET_R2_1SEC,  "our_result": None},
+            {"resolution": "15-min",  "source": "literature",  "target_r2": NILM_TARGET_R2_15MIN, "our_result": None},
+            {"resolution": "30-min",  "source": "literature",  "target_r2": NILM_TARGET_R2_30MIN, "our_result": None},
         ],
-        "key_finding": "Physical constraints + digital-twin pretraining recovers 8 R² points vs naive model at 15-min resolution",
+        "key_hypothesis": (
+            "Physical constraints + digital-twin pretraining should recover "
+            "accuracy at 15-min resolution vs naive model. "
+            "To be verified on HIPE dataset."
+        ),
     }
