@@ -291,37 +291,67 @@ def _build_result(jobs, solver, start_vars, solve_time, status_name, method, max
     )
 
 
-def _fallback_greedy(jobs, max_demand_kva, solve_time=0.0, status_name="GREEDY") -> SchedulerResult:
-    """Greedy: each flexible job picks cheapest valid start independently."""
-    start_vals = []
+def _fallback_greedy(jobs, max_demand_kva, solve_time=0.0, status_name="GREEDY_HEURISTIC") -> SchedulerResult:
+    """
+    Independent Sequential Dispatch Heuristic (Greedy):
+    Schedules jobs in dispatch order (prioritizing fixed jobs, then earliest deadline,
+    then highest power). For each job, it searches for the cheapest valid start slot
+    that does not violate the concurrent Maximum Demand headroom (MD_KW).
+    
+    Because Greedy acts sequentially without global lookahead, early jobs consume 
+    capacity in cheaper slots, forcing later jobs into higher tariff periods.
+    This demonstrates why CP-SAT's global combinatorial search achieves higher savings.
+    """
+    MD_KW = round(max_demand_kva * SEP_AVG_PF_APPROX - HVAC_BASE_KW, 1)
+    slot_kw = [HVAC_BASE_KW] * 96
+
+    # 1. First reserve fixed / regulatory jobs
     for j in jobs:
+        if not j.is_flexible and j.fixed_start is not None:
+            for s in range(j.fixed_start, min(j.fixed_start + j.duration_slots, 96)):
+                slot_kw[s] += j.power_kw
+
+    # 2. Sort flexible jobs by standard dispatch order: earliest deadline, then power
+    ordered_indices = sorted(
+        range(len(jobs)),
+        key=lambda idx: (not jobs[idx].is_flexible, jobs[idx].deadline_slot, -jobs[idx].power_kw)
+    )
+
+    start_vals = {}
+    for idx in ordered_indices:
+        j = jobs[idx]
         if not j.is_flexible:
-            start_vals.append(j.fixed_start)
+            start_vals[idx] = j.fixed_start
             continue
+
         hi_raw = j.deadline_slot - j.duration_slots if j.deadline_slot < 96 else 96 - j.duration_slots
         hi = max(j.earliest_slot, min(hi_raw, 96 - j.duration_slots))
-        best_c = 1e18; best_s = j.earliest_slot
+
+        best_slot = None
+        best_cost = 1e18
+
+        # First pass: find slot with lowest energy cost that strictly fits under MD_KW
         for s in range(j.earliest_slot, int(hi) + 1):
-            c = _job_cost(j, s)
-            if c < best_c:
-                best_c = c; best_s = s
-        start_vals.append(best_s)
+            fits = all(slot_kw[t] + j.power_kw <= MD_KW for t in range(s, min(s + j.duration_slots, 96)))
+            cost = _job_cost(j, s)
+            if fits and cost < best_cost:
+                best_cost = cost
+                best_slot = s
 
-    # Build mock solver-like accessor
-    class _MockSolver:
-        def Value(self, v):
-            try:
-                return int(v)   # constants are ints
-            except Exception:
-                return int(start_vals[v])
+        # Second pass (fallback if congested): pick slot with lowest cost even if exceeding
+        if best_slot is None:
+            for s in range(j.earliest_slot, int(hi) + 1):
+                cost = _job_cost(j, s)
+                if cost < best_cost:
+                    best_cost = cost
+                    best_slot = s
 
-    # Create fake start_vars that map to start_vals by index
-    class _Idx:
-        def __init__(self, idx): self.idx = idx
+        start_vals[idx] = best_slot if best_slot is not None else j.earliest_slot
+        # Reserve capacity
+        for t in range(start_vals[idx], min(start_vals[idx] + j.duration_slots, 96)):
+            slot_kw[t] += j.power_kw
 
-    fake_vars = [_Idx(i) for i in range(len(jobs))]
-
-    # Override build_result with direct access
+    # Format result jobs preserving original order
     result_jobs = []
     cur_cost = opt_cost = daily_kwh = 0.0
     for i, j in enumerate(jobs):
@@ -329,34 +359,51 @@ def _fallback_greedy(jobs, max_demand_kva, solve_time=0.0, status_name="GREEDY")
         cur_s = _job_current_start(j)
         c_c   = _job_cost(j, cur_s)
         o_c   = _job_cost(j, opt_s)
-        cur_cost += c_c; opt_cost += o_c
+        cur_cost += c_c
+        opt_cost += o_c
         daily_kwh += j.power_kw * j.duration_slots * 0.25
 
         result_jobs.append({
-            "job_name": j.name, "machine": j.machine, "power_kw": j.power_kw,
-            "duration_h": round(j.duration_slots * 0.25, 2),
-            "energy_kwh": round(j.power_kw * j.duration_slots * 0.25, 1),
-            "is_flexible": j.is_flexible,
-            "constraint": ("Fixed" if not j.is_flexible else f"Deadline slot {j.deadline_slot}"),
-            "current_start": round(cur_s/96, 4), "current_end": round((cur_s+j.duration_slots)/96, 4),
-            "optimal_start": round(opt_s/96, 4), "optimal_end": round((opt_s+j.duration_slots)/96, 4),
-            "current_start_h": f"{cur_s//4:02d}:{(cur_s%4)*15:02d}",
-            "optimal_start_h": f"{opt_s//4:02d}:{(opt_s%4)*15:02d}",
-            "current_tariff": _tariff_period(cur_s), "optimal_tariff": _tariff_period(opt_s),
-            "tariff_shift": _tariff_period(cur_s) + " to " + _tariff_period(opt_s),
-            "job_saving_inr": round(c_c - o_c, 1), "saving_inr": round(c_c - o_c, 1),
+            "job_name":         j.name,
+            "machine":          j.machine,
+            "power_kw":         j.power_kw,
+            "duration_h":       round(j.duration_slots * 0.25, 2),
+            "energy_kwh":       round(j.power_kw * j.duration_slots * 0.25, 1),
+            "is_flexible":      j.is_flexible,
+            "constraint":       ("Fixed" if not j.is_flexible else f"Deadline {j.deadline_slot//4:02d}:{(j.deadline_slot%4)*15:02d}"),
+            "current_start":    round(cur_s / 96, 4),
+            "current_end":      round((cur_s + j.duration_slots) / 96, 4),
+            "optimal_start":    round(opt_s / 96, 4),
+            "optimal_end":      round((opt_s + j.duration_slots) / 96, 4),
+            "current_start_h":  f"{cur_s//4:02d}:{(cur_s%4)*15:02d}",
+            "optimal_start_h":  f"{opt_s//4:02d}:{(opt_s%4)*15:02d}",
+            "current_tariff":   _tariff_period(cur_s),
+            "optimal_tariff":   _tariff_period(opt_s),
+            "tariff_shift":     _tariff_period(cur_s) + " to " + _tariff_period(opt_s),
+            "job_saving_inr":   round(c_c - o_c, 1),
+            "saving_inr":       round(c_c - o_c, 1),
         })
 
     saving_day = round(cur_cost - opt_cost, 2)
+    max_kw_observed = max(slot_kw)
+    md_respected = max_kw_observed <= (MD_KW + 1.0)
+
     return SchedulerResult(
-        feasible=True, method=f"Greedy ({status_name})", solve_time_s=solve_time,
+        feasible=True,
+        method="Greedy Heuristic (Sequential Dispatch)",
+        solve_time_s=solve_time,
         jobs=result_jobs,
-        current_cost_inr=round(cur_cost, 2), optimal_cost_inr=round(opt_cost, 2),
-        saving_inr_day=saving_day, saving_inr_month=round(saving_day * 25, 2),
+        current_cost_inr=round(cur_cost, 2),
+        optimal_cost_inr=round(opt_cost, 2),
+        saving_inr_day=saving_day,
+        saving_inr_month=round(saving_day * 25, 2),
         saving_pct=round(saving_day / max(cur_cost, 1) * 100, 1),
-        peak_demand_kva=round(max_demand_kva, 1), md_respected=True,
-        solver_status=status_name, daily_kwh_scheduled=round(daily_kwh, 1),
+        peak_demand_kva=round(max_kw_observed / SEP_AVG_PF_APPROX, 1),
+        md_respected=md_respected,
+        solver_status=status_name,
+        daily_kwh_scheduled=round(daily_kwh, 1),
     )
+
 
 
 # PF approximation (needed for MD calc inside module)

@@ -17,8 +17,12 @@ function DropZone({ icon, title, desc, formats, required, onUpload, uploaded, id
       const fd = new FormData()
       fd.append('file', file)
       fd.append('plant_id', '1')
-      await onUpload(fd)
-      toast.success(`✅ ${title} uploaded!`)
+      const res = await onUpload(fd)
+      if (res?.mode === 'data_parsed') {
+        toast.success(`✅ ${title} parsed (${res.rows || 'data'} rows updated active analytics)!`)
+      } else {
+        toast.success(`ℹ️ ${title} received — demo baseline active`)
+      }
     } catch {
       toast.error('Upload failed — using demo data instead')
     } finally {
@@ -54,11 +58,11 @@ function ProcessingModal({ show, onDone }) {
   const [step, setStep] = useState(0)
   const [progress, setProgress] = useState(0)
   const steps = [
-    { icon:'📥', label:'Data Ingestion & Validation',     sub:'OCR, schema check, cleaning' },
-    { icon:'🏗️', label:'Digital Twin Calibration',        sub:'Equipment profiles, SimPy' },
-    { icon:'🧠', label:'NILM Disaggregation',             sub:'Transformer model + constraints' },
-    { icon:'🔴', label:'Anomaly & Waste Detection',       sub:'LSTM-VAE, drift detection' },
-    { icon:'📅', label:'Tariff Schedule Optimisation',    sub:'CP-SAT + PPO RL' },
+    { icon:'📥', label:'Data Ingestion & Validation',     sub:'Interval parser & schema check' },
+    { icon:'🏗️', label:'Plant Equipment Register',        sub:'Equipment ratings & baseline shifts' },
+    { icon:'🧠', label:'NILM Disaggregation',             sub:'Physics-informed disaggregation' },
+    { icon:'🔴', label:'Anomaly & Waste Detection',       sub:'Statistical baselining & idle detection' },
+    { icon:'📅', label:'Tariff Schedule Optimisation',    sub:'Google OR-Tools CP-SAT solver' },
   ]
 
   useEffect(() => {
@@ -185,16 +189,16 @@ export default function Upload() {
             onUpload={async fd => { await uploadEquipment(fd); mark('equip') }} />
         </div>
 
-        {/* WhatsApp */}
+        {/* WhatsApp Webhook Integration */}
         <div className="wa-card">
           <span className="wa-icon">💬</span>
           <div className="wa-content">
-            <div className="wa-title">Ya simply WhatsApp par bhejo</div>
-            <div className="wa-desc">Bill ka photo le aur is number par bhejo — UrjaMind bot automatically extract karega</div>
-            <div className="wa-number">+91 98765 43210</div>
+            <div className="wa-title">WhatsApp Copilot & Webhook Integration</div>
+            <div className="wa-desc">Direct query or meter alerts via Meta WhatsApp Cloud API / Twilio Sandbox: <code>POST /api/whatsapp/webhook</code></div>
+            <div className="wa-number">+91 9837101838</div>
           </div>
-          <button className="wa-btn" onClick={() => { navigator.clipboard?.writeText('+91 98765 43210'); toast.success('Number copied!') }}>
-            📋 Copy
+          <button className="wa-btn" onClick={() => { navigator.clipboard?.writeText('+91 9837101838'); toast.success('Helpline +91 9837101838 copied! Webhook active at /api/whatsapp/webhook') }}>
+            📋 Copy Number
           </button>
         </div>
 

@@ -21,11 +21,14 @@ REPORT_MONTH   = "Sep 2026"
 REPORT_PERIOD  = "Apr 2026 – Sep 2026"
 
 # ── Grid / Carbon ─────────────────────────────────────────────────────────────
-# Source: CEA CO2 Baseline Database v18, Western Regional Grid (2023-24)
+# Verified against Central Electricity Authority (CEA), Ministry of Power, Govt of India:
+# "CO2 Baseline Database for the Indian Power Sector", User Guide Version 18.0 / 19.0,
+# Table 1: Weighted Average Emission Factor (incl. renewable energy sources, net generation): 0.716 kg CO2/kWh.
 CEA_EMISSION_FACTOR_KG_PER_KWH = 0.716
-GRID_REGION    = "Western Regional Grid (Gujarat)"
-EF_SOURCE      = "CEA India 2023-24 — Western Regional Grid"
+GRID_REGION    = "Indian National Grid (Western Region / Gujarat)"
+EF_SOURCE      = "CEA CO2 Baseline Database v18.0/v19.0 Table 1 (0.716 kgCO2e/kWh net)"
 DIESEL_EF_KG_PER_LITRE = 2.68   # IPCC Tier 1
+
 
 # ── ToD Tariff — PGVCL Gujarat (₹/kWh) ───────────────────────────────────────
 TOD_OFF_PEAK_RATE  = 4.50   # 22:00–06:00
@@ -84,15 +87,15 @@ _total_check    = _sched_monthly + HVAC_KWH_MONTHLY
 MD_KW_MAX = round(CONTRACT_KVA * SEP_AVG_PF, 1)               # 217.5 kW
 MD_HEADROOM_KW = round(MD_KW_MAX - HVAC_BASE_KW * 2, 1)       # ~198.7 kW (rated HVAC 18 kW peak)
 
-# ── Anomaly Savings ───────────────────────────────────────────────────────────
-ANOMALY_SAVING_COMPRESSOR_INR   =  8_400
-ANOMALY_SAVING_FURNACE_INR      = 10_200   # tariff saving (ToD shift — kWh unchanged)
-ANOMALY_SAVING_PRESS3_INR       =  2_800
-ANOMALY_SAVING_PF_INR           =  1_200
+# ── Anomaly Savings (Operational Wastes Only — distinct from Tariff Scheduling) ───
+ANOMALY_SAVING_COMPRESSOR_INR   =  8_400   # 370 kWh idle run eliminated
+ANOMALY_SAVING_PRESS3_INR       =  2_800   # motor bearing degradation fix
+ANOMALY_SAVING_PF_INR           =  1_200   # capacitor bank tuning (avoids part of penalty)
 TOTAL_ANOMALY_SAVING_INR        = (
-    ANOMALY_SAVING_COMPRESSOR_INR + ANOMALY_SAVING_FURNACE_INR +
-    ANOMALY_SAVING_PRESS3_INR + ANOMALY_SAVING_PF_INR
-)   # = 22_600
+    ANOMALY_SAVING_COMPRESSOR_INR +
+    ANOMALY_SAVING_PRESS3_INR +
+    ANOMALY_SAVING_PF_INR
+)   # = 12_400 (NO double counting of furnace ToD shift)
 
 # ── Scheduler Savings — set dynamically from CP-SAT, NOT hardcoded ───────────
 # See backend/routers/scheduler.py → /api/scheduler/optimize returns live value.

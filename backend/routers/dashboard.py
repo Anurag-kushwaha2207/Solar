@@ -26,31 +26,33 @@ def get_tariff_rate(hour: int) -> float:
 
 @router.get("/kpis")
 async def get_kpis(plant_id: int = 1):
+    from active_data import active_plant
     return {
         "plant":   PLANT_NAME,
         "period":  REPORT_MONTH,
         "tier":    2,
-        "data_source": "DISCOM 15-min interval meter CSV",
+        "data_source": f"Active: {active_plant.source} ({active_plant.filename})",
         "kpis": {
-            "total_kwh":          SEP_TOTAL_KWH,
-            "total_kvah":         SEP_TOTAL_KVAH,
-            "max_demand_kva":     SEP_MAX_DEMAND_KVA,
-            "specific_energy":    SEP_SEC_ENERGY,
-            "avg_power_factor":   SEP_AVG_PF,
-            "pf_penalty_inr":     SEP_PF_PENALTY_INR,
+            "total_kwh":          active_plant.total_kwh,
+            "total_kvah":         round(active_plant.total_kwh / max(0.01, active_plant.avg_pf), 1),
+            "max_demand_kva":     round(active_plant.peak_kw / max(0.01, active_plant.avg_pf), 1),
+            "specific_energy":    active_plant.specific_energy,
+            "avg_power_factor":   active_plant.avg_pf,
+            "pf_penalty_inr":     SEP_PF_PENALTY_INR if active_plant.avg_pf < 0.90 else 0,
             "md_penalty_inr":     SEP_MD_PENALTY_INR,
-            "total_amount_inr":   SEP_TOTAL_AMOUNT_INR,
+            "total_amount_inr":   active_plant.total_bill_inr,
             "production_kg":      SEP_PRODUCTION_KG,
         },
         "baseline_specific_energy":  BASELINE_SEC_ENERGY,
-        "current_specific_energy":   SEP_SEC_ENERGY,
-        "deviation_pct":             SEP_DEVIATION_PCT,
+        "current_specific_energy":   active_plant.specific_energy,
+        "deviation_pct":             active_plant.deviation_pct,
     }
 
 
 @router.get("/machine-breakdown")
 async def get_machine_breakdown(plant_id: int = 1):
-    total = SEP_TOTAL_KWH
+    from active_data import active_plant
+    total = active_plant.total_kwh
     machines = []
     status_map = {
         "Air Compressor (75 kW)":           "idle_waste",
@@ -58,20 +60,19 @@ async def get_machine_breakdown(plant_id: int = 1):
         "Lighting & HVAC":                  "pf_issue",
     }
     pf_map = {
-        "Induction Furnace (500 kg)":  0.91,
-        "Air Compressor (75 kW)":      0.85,
-        "Hydraulic Press ×3":          0.88,
-        "Fettling Machine ×6":         0.84,
-        "Lighting & HVAC":             0.80,
+        "Induction Furnace (500 kg)": 0.91,
+        "Air Compressor (75 kW)":     0.85,
+        "Hydraulic Press ×3":         0.88,
+        "Fettling Machine ×6":        0.84,
+        "Lighting & HVAC":            0.80,
     }
-    for machine, kwh in MACHINE_KWH.items():
+    for m, kwh in active_plant.machines.items():
         machines.append({
-            "machine":   machine,
-            "kwh":       kwh,
-            "share_pct": round(kwh / total * 100, 1),
-            "avg_pf":    pf_map.get(machine, 0.87),
-            "status":    status_map.get(machine, "normal"),
-            "method":    "physics-simulation",
+            "machine":   m,
+            "kwh":       round(kwh, 1),
+            "share_pct": round(kwh / max(1.0, total) * 100, 1),
+            "avg_pf":    pf_map.get(m, 0.87),
+            "status":    status_map.get(m, "normal"),
         })
     return {
         "period":               REPORT_MONTH,
@@ -79,7 +80,7 @@ async def get_machine_breakdown(plant_id: int = 1):
         "machines":             machines,
         "top_waste_machine":    "Air Compressor (75 kW)",
         "potential_saving_inr": TOTAL_ANOMALY_SAVING_INR,
-        "note":                 "Machine-level breakdown: physics simulation (Phase 1). ML disaggregation in Phase 2.",
+        "note":                 "Machine-level breakdown: active plant state (feeds from uploaded CSV or demo baseline).",
     }
 
 

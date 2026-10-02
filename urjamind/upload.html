@@ -257,11 +257,11 @@
       <div class="whatsapp-section">
         <div class="wa-icon">💬</div>
         <div class="wa-content">
-          <h3>Ya simply WhatsApp par bhejo</h3>
-          <p>Bill ka photo le aur is number par bhejo — UrjaMind bot automatically extract karega aur process karega</p>
-          <div class="wa-number">+91 98765 43210</div>
+          <h3>WhatsApp Webhook Integration</h3>
+          <p>Automated copilot via Meta WhatsApp Cloud API / Twilio sandbox webhook</p>
+          <div class="wa-number">+91 9837101838 &bull; POST /api/whatsapp/webhook</div>
         </div>
-        <button class="wa-btn" onclick="showToast('WhatsApp number copied!')">📋 Copy Number</button>
+        <button class="wa-btn" onclick="navigator.clipboard?.writeText('+91 9837101838'); showToast('Helpline +91 9837101838 copied. Webhook: POST /api/whatsapp/webhook')">📋 Copy Number</button>
       </div>
 
       <div class="process-section">
@@ -288,23 +288,23 @@
       <div class="pipeline-steps">
         <div class="p-step pending" id="ps-1">
           <div class="p-step-icon">📥</div>
-          <div><div class="p-step-label">Data Ingestion & Validation</div><div class="p-step-sub">OCR, schema check, cleaning</div></div>
+          <div><div class="p-step-label">Data Ingestion & Validation</div><div class="p-step-sub">Interval parser & schema check</div></div>
         </div>
         <div class="p-step pending" id="ps-2">
           <div class="p-step-icon">🏗️</div>
-          <div><div class="p-step-label">Digital Twin Calibration</div><div class="p-step-sub">Equipment profiles, SimPy simulation</div></div>
+          <div><div class="p-step-label">Plant Equipment Register</div><div class="p-step-sub">Equipment ratings & baseline shifts</div></div>
         </div>
         <div class="p-step pending" id="ps-3">
           <div class="p-step-icon">🧠</div>
-          <div><div class="p-step-label">NILM Disaggregation</div><div class="p-step-sub">Transformer model, physical constraints</div></div>
+          <div><div class="p-step-label">NILM Disaggregation</div><div class="p-step-sub">Physics-informed disaggregation</div></div>
         </div>
         <div class="p-step pending" id="ps-4">
           <div class="p-step-icon">🔴</div>
-          <div><div class="p-step-label">Anomaly & Waste Detection</div><div class="p-step-sub">LSTM-VAE, drift detection</div></div>
+          <div><div class="p-step-label">Anomaly & Waste Detection</div><div class="p-step-sub">Statistical baselining & idle detection</div></div>
         </div>
         <div class="p-step pending" id="ps-5">
           <div class="p-step-icon">📅</div>
-          <div><div class="p-step-label">Tariff Schedule Optimisation</div><div class="p-step-sub">CP-SAT + PPO RL</div></div>
+          <div><div class="p-step-label">Tariff Schedule Optimisation</div><div class="p-step-sub">Google OR-Tools CP-SAT</div></div>
         </div>
       </div>
       <a href="dashboard.html" class="go-dashboard-btn" id="go-btn">View Your Dashboard →</a>

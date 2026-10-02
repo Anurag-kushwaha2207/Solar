@@ -3,11 +3,11 @@ UrjaMind Backend — FastAPI Application
 AI Energy Intelligence Platform for Indian SMEs
 """
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from routers import ingestion, dashboard, nilm, anomaly, scheduler, carbon, copilot, auth
+from routers import ingestion, dashboard, nilm, anomaly, scheduler, carbon, copilot, auth, whatsapp
 
 app = FastAPI(
     title="UrjaMind API",
@@ -35,6 +35,22 @@ app.include_router(anomaly.router,    prefix="/api/anomaly",   tags=["Anomaly De
 app.include_router(scheduler.router,  prefix="/api/scheduler", tags=["Tariff Scheduler"])
 app.include_router(carbon.router,     prefix="/api/carbon",    tags=["Carbon Report"])
 app.include_router(copilot.router,    prefix="/api/copilot",   tags=["LLM Copilot"])
+app.include_router(whatsapp.router,   prefix="/api",           tags=["WhatsApp"])
+app.include_router(whatsapp.router,   prefix="",               tags=["WhatsApp"])
+
+@app.get("/webhook")
+async def root_webhook_get(request: Request):
+    from routers.whatsapp import verify_meta_webhook
+    return await verify_meta_webhook(
+        hub_mode=request.query_params.get("hub.mode"),
+        hub_verify_token=request.query_params.get("hub.verify_token"),
+        hub_challenge=request.query_params.get("hub.challenge"),
+    )
+
+@app.post("/webhook")
+async def root_webhook_post(request: Request):
+    from routers.whatsapp import receive_whatsapp_message
+    return await receive_whatsapp_message(request)
 
 
 @app.get("/api/health")

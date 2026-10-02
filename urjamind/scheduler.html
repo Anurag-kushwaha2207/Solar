@@ -116,7 +116,7 @@
       </div>
       <button class="optimize-btn" onclick="runOptimizer()" id="opt-btn">
         <span id="opt-icon">🚀</span>
-        <span id="opt-text">Run CP-SAT + PPO Optimizer</span>
+        <span id="opt-text">Run CP-SAT Optimizer</span>
       </button>
     </div>
   </nav>
@@ -198,14 +198,12 @@
         <div class="constraints-card">
           <h3>⚙️ Optimizer Settings</h3>
           <div class="method-badge">
-            <div class="m-badge active">CP-SAT (Exact)</div>
-            <div class="m-badge active">PPO RL</div>
-            <div class="m-badge inactive">Greedy</div>
-            <div class="m-badge inactive">DQN</div>
+            <div class="m-badge active">Google OR-Tools CP-SAT</div>
+            <div class="m-badge inactive">Greedy Heuristic</div>
           </div>
           <div class="constraint-row">
             <div class="constraint-label">Max Demand Limit</div>
-            <div class="constraint-value" style="color:var(--blue-light)">200 kVA</div>
+            <div class="constraint-value" style="color:var(--blue-light)">250 kVA</div>
           </div>
           <div class="constraint-row">
             <div class="constraint-label">Respect Deadlines</div>
@@ -236,7 +234,7 @@
             <h4>📈 Projected Monthly Impact</h4>
             <canvas id="impactChart" height="160"></canvas>
           </div>
-          <button class="export-btn" onclick="alert('📋 Schedule exported as Excel + PDF\n\n✅ Sent to plant manager WhatsApp\n✅ Saved to GDrive')">
+          <button class="export-btn" onclick="alert('📋 Schedule exported as Excel + PDF\n\n✅ Optimized shift timings saved\n✅ Operations package ready for plant review')">
             📋 Export Schedule
           </button>
           <button class="export-btn" onclick="location.href='carbon.html'" style="margin-top:8px;background:rgba(167,139,250,0.1);border-color:rgba(167,139,250,0.3);color:#a78bfa">

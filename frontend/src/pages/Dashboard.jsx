@@ -66,7 +66,7 @@ function AlertCard({ alert, onResolve }) {
 function Copilot() {
   const [msgs, setMsgs] = useState([{
     role:'bot',
-    content:'Namaste! 🙏 Main aapka UrjaMind Copilot hun. Rajkot Foundry ka data analyze ho gaya hai.\n\nIs mahine **4 anomalies** detect hui hain — potential saving: **₹22,600/month**\n\nKoi bhi sawaal pucho!'
+    content:'Namaste! 🙏 Main aapka UrjaMind Copilot hun. Rajkot Foundry ka data analyze ho gaya hai.\n\nIs mahine **3 operational anomalies** detect hui hain — potential saving: **₹12,400/month** (Scheduler tab mein ToD optimization se ₹47,500/month alag se potential hai).\n\nKoi bhi sawaal pucho!'
   }])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -167,9 +167,8 @@ export default function Dashboard() {
           actual_kwh_per_kg:  [3.45,3.50,3.62,3.75,3.80,3.83]})
         setAlerts([
           {id:1,title:'Idle Compressor — Raat 11PM–3AM',description:'Physics model: 4.2 kW idle × ~4h × 22 nights = 370 kWh waste.',potential_saving_inr:8400,severity:'high'},
-          {id:2,title:'Furnace — Peak Tariff (₹8.20/kWh)',description:'Shift to off-peak ₹4.50 → same kWh, lower cost.',potential_saving_inr:10200,severity:'medium'},
-          {id:3,title:'Press #3 Motor Degradation',description:'Specific energy trending +0.3%/day (physics sim).',potential_saving_inr:2800,severity:'medium'},
-          {id:4,title:'Power Factor Drop — PF 0.870',description:'DISCOM measured PF → penalty ₹3,200/month.',potential_saving_inr:1200,severity:'low'},
+          {id:2,title:'Press #3 Motor Degradation',description:'Specific energy trending +0.3%/day (physics sim).',potential_saving_inr:2800,severity:'medium'},
+          {id:3,title:'Power Factor Drop — PF 0.870',description:'DISCOM measured PF → penalty ₹3,200/month.',potential_saving_inr:1200,severity:'low'},
         ])
         setNilm({status:'SIMULATED', model:'Physics simulation (Phase 1). ML training planned Phase 2.'})
       })

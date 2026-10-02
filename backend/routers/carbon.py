@@ -10,7 +10,7 @@ from constants import (
     MONTHLY_SCOPE1, MONTHLY_SCOPE2, MONTHLY_KWH,
     COMPRESSOR_SAVING_KWH, COMPRESSOR_CO2_T, COMPRESSOR_SAVING_INR,
     PF_SAVING_KWH, PF_CO2_T, PF_SAVING_INR,
-    ANOMALY_SAVING_FURNACE_INR, PROJECTED_SAVING_TCO2E_YEAR,
+    SCHEDULER_SAVING_APPROX_INR_MONTH, PROJECTED_SAVING_TCO2E_YEAR,
 )
 
 router = APIRouter()
@@ -81,7 +81,7 @@ async def get_report(plant_id: int = 1):
                 "actual_kwh":     None,
                 "saving_kwh":     0,
                 "co2_avoided_t":  0.0,
-                "saving_inr":     ANOMALY_SAVING_FURNACE_INR,
+                "saving_inr":     SCHEDULER_SAVING_APPROX_INR_MONTH,
                 "status":         "simulated",
                 "note":           "Same kWh, cheaper tariff window — no CO₂ reduction",
             },

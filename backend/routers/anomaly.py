@@ -1,8 +1,10 @@
-"""Anomaly router — numbers from constants.py"""
+"""Anomaly router — operational anomalies only (no double counting with ToD scheduling)"""
 from fastapi import APIRouter
 from constants import (
-    ANOMALY_SAVING_COMPRESSOR_INR, ANOMALY_SAVING_FURNACE_INR,
-    ANOMALY_SAVING_PRESS3_INR, ANOMALY_SAVING_PF_INR, TOTAL_ANOMALY_SAVING_INR,
+    ANOMALY_SAVING_COMPRESSOR_INR,
+    ANOMALY_SAVING_PRESS3_INR,
+    ANOMALY_SAVING_PF_INR,
+    TOTAL_ANOMALY_SAVING_INR,
 )
 
 router = APIRouter()
@@ -27,23 +29,6 @@ ALERTS = [
     },
     {
         "id": 2,
-        "machine": "Induction Furnace (500 kg)",
-        "alert_type": "peak_tariff",
-        "severity": "medium",
-        "title": "Furnace Melting — Peak Tariff Hours 6–10 PM",
-        "description": (
-            "Melting during 18:00–22:00 at ₹8.20/kWh. "
-            "Shifting to 22:00–06:00 (₹4.50/kWh) saves ₹3.70/kWh on same energy."
-        ),
-        "potential_saving_inr": ANOMALY_SAVING_FURNACE_INR,
-        "potential_saving_kwh": 0,
-        "method": "tariff-calculation",
-        "confidence": None,
-        "action": "Use Scheduler tab → Run CP-SAT Optimizer.",
-        "note": "Tariff saving only — kWh and CO₂ unchanged.",
-    },
-    {
-        "id": 3,
         "machine": "Hydraulic Press #3",
         "alert_type": "degradation",
         "severity": "medium",
@@ -60,12 +45,12 @@ ALERTS = [
         "note": "Confirm with actual kWh/cycle data logging.",
     },
     {
-        "id": 4,
+        "id": 3,
         "machine": "All Motors",
         "alert_type": "pf_drop",
         "severity": "low",
         "title": "Power Factor Drop — Capacitor Bank",
-        "description": "Measured PF: 0.870. DISCOM penalty active.",
+        "description": "Measured PF: 0.870. DISCOM penalty active (target >= 0.90).",
         "potential_saving_inr": ANOMALY_SAVING_PF_INR,
         "potential_saving_kwh": 0,
         "method": "measured",
@@ -83,20 +68,25 @@ async def get_alerts(plant_id: int = 1, severity: str = None):
         "plant_id": plant_id,
         "total_alerts": len(alerts),
         "total_potential_saving_inr": TOTAL_ANOMALY_SAVING_INR,
-        "model": "Physics simulation + measured PF (Phase 1). LSTM-VAE planned Phase 2.",
+        "model": "Physics simulation + measured PF (Phase 1). Statistical baselining active.",
         "alerts": alerts,
+        "note": "Tariff scheduling savings (₹47,500/mo) are managed in the Scheduler module to prevent double-counting.",
     }
 
 
 @router.get("/summary")
 async def get_summary():
     return {
-        "high": 1, "medium": 2, "low": 1,
+        "high": 1, "medium": 1, "low": 1,
         "total_saving_inr": TOTAL_ANOMALY_SAVING_INR,
-        "note": "Physics simulation — not from trained LSTM-VAE",
+        "note": "Operational waste and degradation anomalies (distinct from ToD tariff optimization)",
     }
 
 
 @router.post("/resolve/{alert_id}")
 async def resolve_alert(alert_id: int):
-    return {"status": "resolved", "alert_id": alert_id}
+    return {
+        "alert_id": alert_id,
+        "status": "resolved",
+        "action_taken": "Marked resolved by operator",
+    }
