@@ -120,6 +120,37 @@ class ActivePlantData:
             "message": f"Successfully parsed {len(df)} interval rows from {filename}. Live dashboard updated.",
         }
 
+    def ingest_bill(self, extracted: dict, filename: str) -> Dict[str, Any]:
+        """Update active plant state using metrics extracted from an electricity bill."""
+        total_kwh = extracted.get("total_kwh", self.total_kwh)
+        total_amount = extracted.get("total_amount_inr", self.total_bill_inr)
+        avg_pf = extracted.get("power_factor", self.avg_pf)
+        max_demand_kva = extracted.get("max_demand_kva", self.peak_kw / max(0.01, self.avg_pf))
+
+        self.source = "user_uploaded_bill_ocr"
+        self.filename = filename
+        self.total_kwh = round(float(total_kwh), 1)
+        self.total_bill_inr = round(float(total_amount), 0)
+        self.avg_pf = round(float(avg_pf), 3)
+        self.peak_kw = round(float(max_demand_kva * self.avg_pf), 1)
+        self.specific_energy = round(self.total_kwh / 12_580, 3)
+        self.deviation_pct = round((self.specific_energy - BASELINE_SEC_ENERGY) / BASELINE_SEC_ENERGY * 100, 1)
+
+        # Scale machine breakdown proportionally
+        factor = self.total_kwh / max(1.0, float(SEP_TOTAL_KWH))
+        self.machines = {m: round(k * factor, 1) for m, k in MACHINE_KWH.items()}
+
+        return {
+            "success": True,
+            "mode": "bill_ocr_parsed",
+            "total_kwh": self.total_kwh,
+            "total_bill_inr": self.total_bill_inr,
+            "peak_kw": self.peak_kw,
+            "avg_pf": self.avg_pf,
+            "message": f"Successfully extracted bill data from {filename}. Live dashboard updated.",
+        }
+
 
 # Singleton active data store
 active_plant = ActivePlantData()
+

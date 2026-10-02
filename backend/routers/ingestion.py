@@ -12,21 +12,47 @@ from active_data import active_plant
 router = APIRouter()
 
 
+from bill_ocr import process_uploaded_bill
+
+
 @router.post("/upload-bill")
 async def upload_bill(file: UploadFile = File(...), plant_id: int = Form(1)):
     """
     Bill upload endpoint.
-    Honesty policy: Real OCR extraction (PaddleOCR / pdfplumber) is Phase 2.
-    Returns demo values with explicit 'demo_values_used' status.
+    Extracts consumption, demand, PF, and payable amount from digital PDF or text bills via PyMuPDF.
+    Updates the active plant analytics state when recognized.
     """
     content = await file.read()
+    ocr_res = process_uploaded_bill(content, file.filename)
+
+    if ocr_res.get("success"):
+        extracted = ocr_res["extracted_data"]
+        # Update live plant state with extracted values
+        update_info = active_plant.ingest_bill(extracted, file.filename)
+        return {
+            "status": "processed",
+            "mode": "bill_ocr_parsed",
+            "file": file.filename,
+            "size_kb": round(len(content) / 1024, 1),
+            "ocr_engine": ocr_res["engine"],
+            "message": f"Bill successfully parsed via {ocr_res['engine']}! Live analytics updated.",
+            "extracted": extracted,
+            "data_tier": 1,
+            "active_state": {
+                "total_kwh": active_plant.total_kwh,
+                "total_bill_inr": active_plant.total_bill_inr,
+                "power_factor": active_plant.avg_pf,
+                "peak_kw": active_plant.peak_kw,
+            }
+        }
+
     return {
         "status": "demo_fallback",
         "mode": "demo_values_used",
         "file": file.filename,
         "size_kb": round(len(content) / 1024, 1),
-        "ocr_engine": "Planned for Phase 2 (PaddleOCR)",
-        "message": "Bill file received. OCR extraction is Phase 2 — demo baseline values loaded.",
+        "ocr_engine": ocr_res.get("engine", "Generic Parser"),
+        "message": "Bill file received but DISCOM metrics could not be extracted — demo baseline values retained.",
         "extracted": {
             "month": "Sep 2026",
             "total_kwh": SEP_TOTAL_KWH,
@@ -40,6 +66,7 @@ async def upload_bill(file: UploadFile = File(...), plant_id: int = Form(1)):
         },
         "data_tier": 1,
     }
+
 
 
 @router.post("/upload-meter-data")
