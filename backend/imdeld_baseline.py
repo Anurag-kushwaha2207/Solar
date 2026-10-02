@@ -106,23 +106,21 @@ def train_and_evaluate_nilm(df: pd.DataFrame) -> Dict[str, Any]:
     """
     Train a physics-constrained multi-target regressor on aggregate power
     and evaluate R², MAE, and Signal Aggregate Error (SAE) per appliance.
+    Uses pure electrical features (no time-of-day features to avoid schedule memorization).
     """
-    # Feature engineering: aggregate power, rolling stats, hour-of-day sin/cos
     agg = df["aggregate_kw"].to_numpy()
-    hours = df["timestamp"].dt.hour.to_numpy() + df["timestamp"].dt.minute.to_numpy() / 60.0
-    hour_sin = np.sin(2 * np.pi * hours / 24.0)
-    hour_cos = np.cos(2 * np.pi * hours / 24.0)
-
-    # Rolling window features
+    diff = np.diff(agg, prepend=agg[0])
     roll_mean = df["aggregate_kw"].rolling(window=3, min_periods=1).mean().to_numpy()
     roll_std = df["aggregate_kw"].rolling(window=3, min_periods=1).std().fillna(0).to_numpy()
+    roll_max = df["aggregate_kw"].rolling(window=5, min_periods=1).max().to_numpy()
 
-    X = np.column_stack([agg, roll_mean, roll_std, hour_sin, hour_cos])
+    # Pure electrical features only: aggregate, delta, rolling mean, rolling std, rolling max
+    X = np.column_stack([agg, diff, roll_mean, roll_std, roll_max])
     target_cols = ["furnace_kw", "compressor_kw", "press_kw", "fettling_kw", "hvac_kw"]
     Y = df[target_cols].to_numpy()
 
-    # Train / Test split (80% train, 20% test chronologically)
-    split_idx = int(0.8 * len(X))
+    # Split across days: first 10 days train (71.4%), last 4 days test (28.6%)
+    split_idx = int(len(X) * (10.0 / 14.0))
     X_train, X_test = X[:split_idx], X[split_idx:]
     Y_train, Y_test = Y[:split_idx], Y[split_idx:]
 
@@ -171,7 +169,7 @@ def run_resolution_ablation_experiment() -> Dict[str, Any]:
     """
     Run empirical NILM disaggregation experiment across resolutions:
     1-minute vs 15-minute vs 30-minute.
-    Returns genuine empirical evaluation results.
+    Labels result honestly as a Synthetic Benchmark Simulation (not real IMDELD dataset).
     """
     raw_df = generate_imdeld_synthetic_series(days=14, seed=42)
 
@@ -199,14 +197,15 @@ def run_resolution_ablation_experiment() -> Dict[str, Any]:
 
     return {
         "status": "COMPLETED",
-        "dataset": "IMDELD-aligned Industrial Machine Duty-Cycle Benchmark (14 days, 5 machines)",
-        "models_evaluated": "Ridge Regression with physical non-negative + sum-to-total constraints",
+        "dataset": "Synthetic Foundry Duty-Cycle Benchmark (Simulation of 14-day precision foundry, NOT real IMDELD dataset)",
+        "models_evaluated": "RandomForestRegressor with physical non-negative + sum-to-total constraints (Pure electrical features)",
+        "phase": "Phase 1 Prototype Simulation (Real IMDELD/HIPE training scheduled for Phase 2: Oct 11 - Nov 22)",
         "ablation": ablation_results,
         "conclusion": (
-            "Empirical verification: High-resolution (1-min) achieves macro R² = "
-            f"{ablation_results[0]['macro_r2']}. At DISCOM 15-min interval resolution, physical constraints "
-            f"preserve macro R² = {ablation_results[1]['macro_r2']} (Furnace R² = {ablation_results[1]['furnace_r2']}), "
-            "proving feasibility without hardware retrofits."
+            f"Simulation benchmark evaluation: 1-min interval achieves macro R^2 = {ablation_results[0]['macro_r2']}. "
+            f"At DISCOM standard 15-min interval, macro R^2 is {ablation_results[1]['macro_r2']} "
+            f"(Furnace R^2 = {ablation_results[1]['furnace_r2']}). "
+            "Real ML training on IEEE DataPort IMDELD dataset begins Oct 11."
         ),
     }
 

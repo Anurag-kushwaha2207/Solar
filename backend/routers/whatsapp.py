@@ -10,12 +10,18 @@ Calls UrjaMind Agentic Copilot to generate verified, tool-grounded responses.
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 import os
+import re
+import xml.sax.saxutils
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Header, HTTPException, Query, Request, Response
 from pydantic import BaseModel
+import httpx
+
 from agentic_copilot import ask_agentic_copilot
 
 logger = logging.getLogger("urjamind.whatsapp")
@@ -25,11 +31,37 @@ router = APIRouter(prefix="/whatsapp", tags=["WhatsApp"])
 WHATSAPP_VERIFY_TOKEN = os.environ.get("WHATSAPP_VERIFY_TOKEN", "urjamind_token_2026")
 WHATSAPP_ACCESS_TOKEN = os.environ.get("WHATSAPP_ACCESS_TOKEN")
 WHATSAPP_PHONE_ID = os.environ.get("WHATSAPP_PHONE_ID")
+META_APP_SECRET = os.environ.get("META_APP_SECRET")
+TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
+
+
+def format_for_whatsapp(text: str) -> str:
+    """
+    Format standard markdown into WhatsApp-compatible text syntax.
+    - Markdown **bold** -> WhatsApp *bold*
+    - Ensure readable linebreaks
+    """
+    if not text:
+        return ""
+    # Convert **bold** to *bold*
+    formatted = re.sub(r"\*\*(.*?)\*\*", r"*\1*", text)
+    return formatted
+
+
+def verify_meta_signature(raw_body: bytes, signature_header: Optional[str]) -> bool:
+    """Verify X-Hub-Signature-256 for Meta WhatsApp Cloud API webhooks."""
+    if not META_APP_SECRET:
+        return True  # If no secret configured (development/testing), pass
+    if not signature_header or not signature_header.startswith("sha256="):
+        return False
+    expected_hash = hmac.new(META_APP_SECRET.encode(), raw_body, hashlib.sha256).hexdigest()
+    received_hash = signature_header.split("sha256=")[-1]
+    return hmac.compare_digest(expected_hash, received_hash)
 
 
 class DirectWhatsAppMessage(BaseModel):
     message: str
-    from_number: Optional[str] = "+919876543210"
+    from_number: Optional[str] = "+919837101838"
 
 
 @router.get("/webhook")
@@ -52,7 +84,8 @@ async def verify_meta_webhook(
     return {
         "status": "active",
         "service": "UrjaMind WhatsApp Cloud Webhook",
-        "usage": "Configure Meta Developer Portal Webhook Callback URL to this endpoint with verify token 'urjamind_token_2026'",
+        "verify_token_configured": bool(WHATSAPP_VERIFY_TOKEN),
+        "usage": "Configure Meta Developer Portal Webhook Callback URL to this endpoint",
     }
 
 
@@ -60,8 +93,15 @@ async def verify_meta_webhook(
 async def receive_whatsapp_message(request: Request):
     """
     Handles incoming messages from Meta WhatsApp Cloud API or Twilio Sandbox.
-    Executes Agentic Copilot and responds with verified tool output.
+    Validates optional signatures, executes Agentic Copilot, and returns safe response.
     """
+    raw_body = await request.body()
+
+    # Meta signature validation if secret is set
+    meta_sig = request.headers.get("x-hub-signature-256")
+    if META_APP_SECRET and not verify_meta_signature(raw_body, meta_sig):
+        raise HTTPException(status_code=401, detail="Invalid Meta signature")
+
     content_type = request.headers.get("content-type", "")
     incoming_text = ""
     sender_number = "unknown"
@@ -107,11 +147,11 @@ async def receive_whatsapp_message(request: Request):
     # Execute Agentic Copilot
     bot_response = ask_agentic_copilot(incoming_text)
     answer_text = bot_response.get("content", "Maaf kijiye, abhi process nahi ho paya.")
+    wa_formatted_text = format_for_whatsapp(answer_text)
 
-    # If outbound credentials exist, send message back via Meta Graph API
+    # If outbound credentials exist, send message back via Meta Graph API asynchronously
     if WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_ID and sender_number != "unknown":
         try:
-            import requests
             url = f"https://graph.facebook.com/v19.0/{WHATSAPP_PHONE_ID}/messages"
             headers = {
                 "Authorization": f"Bearer {WHATSAPP_ACCESS_TOKEN}",
@@ -121,17 +161,19 @@ async def receive_whatsapp_message(request: Request):
                 "messaging_product": "whatsapp",
                 "to": sender_number,
                 "type": "text",
-                "text": {"body": answer_text},
+                "text": {"body": wa_formatted_text},
             }
-            requests.post(url, headers=headers, json=body, timeout=5)
+            async with httpx.AsyncClient(timeout=6.0) as client:
+                await client.post(url, headers=headers, json=body)
         except Exception as e:
-            logger.warning("Outbound WhatsApp dispatch error: %s", e)
+            logger.warning("Outbound WhatsApp async dispatch error: %s", e)
 
-    # Return response payload (also supports Twilio TwiML format if Twilio requested)
+    # Return response payload (supports XML-escaped Twilio TwiML format)
     if "application/x-www-form-urlencoded" in content_type:
+        escaped_text = xml.sax.saxutils.escape(wa_formatted_text)
         twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Message>{answer_text}</Message>
+    <Message>{escaped_text}</Message>
 </Response>"""
         return Response(content=twiml, media_type="application/xml")
 
@@ -139,8 +181,8 @@ async def receive_whatsapp_message(request: Request):
         "status": "success",
         "sender": sender_number,
         "input_query": incoming_text,
-        "bot_response": answer_text,
-        "response": answer_text,
+        "bot_response": wa_formatted_text,
+        "response": wa_formatted_text,
         "engine": bot_response.get("engine"),
         "tool_called": bot_response.get("tool_called"),
     }
@@ -153,7 +195,8 @@ async def test_whatsapp_chat(payload: DirectWhatsAppMessage):
     return {
         "from": payload.from_number,
         "input": payload.message,
-        "reply": response["content"],
+        "reply": format_for_whatsapp(response["content"]),
         "tool_called": response.get("tool_called"),
         "engine": response.get("engine"),
     }
+

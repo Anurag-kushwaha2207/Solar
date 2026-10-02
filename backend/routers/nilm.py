@@ -53,10 +53,10 @@ async def disaggregate(plant_id: int = 1):
             "seq2point_15min_r2": "~0.71–0.87 (estimated with physical constraints)",
         },
         "ablation_plan": {
-            "description": "Planned Phase 2 experiment on HIPE/IMDELD",
-            "datasets": ["HIPE (5-sec, electronics manufacturing)", "IMDELD (pelletizers, contactors, fans)"],
+            "description": "Planned Phase 2 ML training and benchmark on IEEE DataPort IMDELD / HIPE",
+            "datasets": ["HIPE (5-sec high-res electronics manufacturing)", "IMDELD (industrial pelletizers, contactors, fans)"],
             "resolutions_to_test": ["1-sec", "1-min", "15-min", "30-min"],
-            "status": "NOT YET EXECUTED",
+            "status": "PHASE_2_PLANNED (Oct 11 - Nov 22)",
         },
         "physical_constraints": "sum_to_total=True, non_negative=True",
     }
@@ -67,24 +67,19 @@ try:
     _ABLATION_CACHE = run_resolution_ablation_experiment()
 except Exception as _e:
     _ABLATION_CACHE = {
-        "status": "COMPLETED (fallback)",
-        "dataset": "IMDELD-aligned Industrial Benchmark",
-        "models_evaluated": "RandomForestRegressor + Physical Constraints",
-        "ablation": [
-            {"resolution": "1-min", "macro_r2": 0.887, "furnace_r2": 0.941, "compressor_r2": 0.862, "macro_mae_kw": 4.12},
-            {"resolution": "15-min", "macro_r2": 0.824, "furnace_r2": 0.893, "compressor_r2": 0.791, "macro_mae_kw": 6.35},
-            {"resolution": "30-min", "macro_r2": 0.748, "furnace_r2": 0.812, "compressor_r2": 0.684, "macro_mae_kw": 9.18},
-        ],
-        "conclusion": "15-min resolution preserves ~82% R² macro accuracy with physical constraints.",
+        "status": "UNAVAILABLE",
+        "error": str(_e),
+        "note": "Scikit-learn and pandas required to run resolution ablation experiment.",
+        "phase": "Phase 1 Prototype",
     }
 
 
 @router.get("/resolution-ablation")
 async def resolution_ablation():
     """
-    Empirical Resolution vs Accuracy Ablation.
-    Trained on 14-day IMDELD-aligned industrial dataset with scikit-learn.
+    Resolution vs Accuracy Ablation on Synthetic Industrial Duty-Cycle Simulation.
     Evaluates 1-minute vs 15-minute (DISCOM standard) vs 30-minute interval data.
+    Clearly discloses this as a prototype synthetic benchmark; real IMDELD training is Phase 2.
     """
     return _ABLATION_CACHE
 

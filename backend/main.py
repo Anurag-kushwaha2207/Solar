@@ -17,10 +17,17 @@ app = FastAPI(
     redoc_url="/api/redoc",
 )
 
-# CORS — allow React frontend
+# CORS — strict origins when credentials are enabled
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000", "*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -36,9 +43,9 @@ app.include_router(scheduler.router,  prefix="/api/scheduler", tags=["Tariff Sch
 app.include_router(carbon.router,     prefix="/api/carbon",    tags=["Carbon Report"])
 app.include_router(copilot.router,    prefix="/api/copilot",   tags=["LLM Copilot"])
 app.include_router(whatsapp.router,   prefix="/api",           tags=["WhatsApp"])
-app.include_router(whatsapp.router,   prefix="",               tags=["WhatsApp"])
 
 @app.get("/webhook")
+
 async def root_webhook_get(request: Request):
     from routers.whatsapp import verify_meta_webhook
     return await verify_meta_webhook(

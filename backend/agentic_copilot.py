@@ -25,28 +25,35 @@ from constants import (
     ANOMALY_SAVING_COMPRESSOR_INR, ANOMALY_SAVING_PRESS3_INR, ANOMALY_SAVING_PF_INR,
     TOTAL_ANOMALY_SAVING_INR,
     SEP_SCOPE2_TCO2E, SEP_SCOPE1_TCO2E, SEP_TOTAL_TCO2E, SEP_EMISSION_INTENSITY,
-    CEA_EMISSION_FACTOR_KG_PER_KWH, EF_SOURCE,
+    CEA_EMISSION_FACTOR_KG_PER_KWH, EF_SOURCE, SEP_PRODUCTION_KG,
 )
-from cpsat_scheduler import solve_cpsat, DEMO_JOBS
+from cpsat_scheduler import solve_cpsat, get_plant_jobs, DEMO_JOBS
+from active_data import active_plant
 
 
 # ── 1. Real Tool Implementations ─────────────────────────────────────────────
 
 def get_kpis() -> Dict[str, Any]:
     """Fetch verified monthly energy KPIs, specific energy, and bill figures."""
+    total_kwh = active_plant.total_kwh
+    total_bill = active_plant.total_bill_inr
+    avg_pf = active_plant.avg_pf
+    sec_energy = active_plant.specific_energy
+    dev_pct = active_plant.deviation_pct
     return {
         "plant": PLANT_NAME,
         "period": "Sep 2026",
-        "total_kwh": SEP_TOTAL_KWH,
-        "total_bill_inr": SEP_TOTAL_AMOUNT_INR,
+        "data_source": active_plant.source,
+        "total_kwh": total_kwh,
+        "total_bill_inr": total_bill,
         "blended_rate_inr_per_kwh": 6.08,
-        "specific_energy_kwh_per_kg": SEP_SEC_ENERGY,
+        "specific_energy_kwh_per_kg": sec_energy,
         "baseline_specific_energy": BASELINE_SEC_ENERGY,
-        "deviation_pct": SEP_DEVIATION_PCT,
-        "power_factor": SEP_AVG_PF,
-        "pf_penalty_inr": SEP_PF_PENALTY_INR,
+        "deviation_pct": dev_pct,
+        "power_factor": avg_pf,
+        "pf_penalty_inr": SEP_PF_PENALTY_INR if avg_pf < 0.90 else 0,
         "contract_demand_kva": CONTRACT_KVA,
-        "note": f"Consumption is {SEP_DEVIATION_PCT}% above baseline due to compressor idle and PF penalty.",
+        "note": f"Consumption is {dev_pct}% vs baseline; power factor is {avg_pf}.",
     }
 
 
@@ -80,7 +87,7 @@ def get_alerts() -> Dict[str, Any]:
                 "severity": "low",
                 "waste_kwh": 0,
                 "saving_inr_month": ANOMALY_SAVING_PF_INR,  # 1,200
-                "finding": f"Operating at {SEP_AVG_PF} PF (target >= 0.90) incurring Rs. {SEP_PF_PENALTY_INR} penalty",
+                "finding": f"Operating at {active_plant.avg_pf} PF (target >= 0.90) incurring penalty",
                 "action": "APFC relay calibration & capacitor step replacement (~Rs. 10,000)",
             },
         ],
@@ -90,7 +97,9 @@ def get_alerts() -> Dict[str, Any]:
 
 def run_optimizer(max_demand_kva: float = 250.0) -> Dict[str, Any]:
     """Run real Google OR-Tools CP-SAT scheduler to optimize shifts against Gujarat ToD tariff."""
-    result = solve_cpsat(DEMO_JOBS, max_demand_kva=max_demand_kva, time_limit_s=5.0)
+    scale = active_plant.total_kwh / max(1.0, float(SEP_TOTAL_KWH))
+    jobs = get_plant_jobs(scale)
+    result = solve_cpsat(jobs, max_demand_kva=max_demand_kva, time_limit_s=5.0)
     top_shifts = []
     for j in result.jobs:
         if j.get("job_saving_inr", 0) > 0:
@@ -107,7 +116,7 @@ def run_optimizer(max_demand_kva: float = 250.0) -> Dict[str, Any]:
         "baseline_daily_cost_inr": result.current_cost_inr,
         "optimal_daily_cost_inr": result.optimal_cost_inr,
         "daily_saving_inr": result.saving_inr_day,
-        "monthly_saving_inr": result.saving_inr_month,  # Rs. 47,500
+        "monthly_saving_inr": result.saving_inr_month,
         "saving_pct": result.saving_pct,
         "contract_demand_kva": max_demand_kva,
         "md_respected": result.md_respected,
@@ -118,27 +127,32 @@ def run_optimizer(max_demand_kva: float = 250.0) -> Dict[str, Any]:
 def get_carbon() -> Dict[str, Any]:
     """Fetch GHG Protocol Scope 1 & 2 carbon footprint, CEA emission factor and SHA-256 digest."""
     import hashlib
+    current_kwh = active_plant.total_kwh
+    scope2_tco2e = round(current_kwh * CEA_EMISSION_FACTOR_KG_PER_KWH / 1000, 2)
+    total_tco2e = round(scope2_tco2e + SEP_SCOPE1_TCO2E, 2)
+    intensity = round(total_tco2e * 1000 / max(1.0, SEP_PRODUCTION_KG), 3)
+
     audit_data = {
         "plant": PLANT_NAME,
         "period": REPORT_PERIOD,
-        "kwh": SEP_TOTAL_KWH,
+        "kwh": current_kwh,
         "emission_factor": CEA_EMISSION_FACTOR_KG_PER_KWH,
         "scope1_tco2e": SEP_SCOPE1_TCO2E,
-        "scope2_tco2e": SEP_SCOPE2_TCO2E,
-        "total_tco2e": SEP_TOTAL_TCO2E,
+        "scope2_tco2e": scope2_tco2e,
+        "total_tco2e": total_tco2e,
     }
     report_sha256 = hashlib.sha256(json.dumps(audit_data, sort_keys=True).encode()).hexdigest()
     return {
         "plant": PLANT_NAME,
         "period": "Sep 2026",
-        "scope2_tco2e": SEP_SCOPE2_TCO2E,
+        "scope2_tco2e": scope2_tco2e,
         "scope1_tco2e": SEP_SCOPE1_TCO2E,
-        "total_tco2e": SEP_TOTAL_TCO2E,
-        "emission_intensity_kg_per_kg": SEP_EMISSION_INTENSITY,
+        "total_tco2e": total_tco2e,
+        "emission_intensity_kg_per_kg": intensity,
         "emission_factor": f"{CEA_EMISSION_FACTOR_KG_PER_KWH} kgCO2e/kWh",
         "emission_factor_source": EF_SOURCE,
         "audit_digest_sha256": report_sha256,
-        "verified_formula": f"{SEP_TOTAL_KWH:,} kWh × {CEA_EMISSION_FACTOR_KG_PER_KWH} kg/kWh ÷ 1000 = {SEP_SCOPE2_TCO2E} tCO₂e",
+        "verified_formula": f"{int(current_kwh):,} kWh × {CEA_EMISSION_FACTOR_KG_PER_KWH} kg/kWh ÷ 1000 = {scope2_tco2e} tCO₂e",
     }
 
 
@@ -194,12 +208,16 @@ CLAUDE_TOOLS = [
 ]
 
 SYSTEM_PROMPT = """You are UrjaMind Copilot, an agentic AI assistant for Indian SME industrial factory managers (foundries, textiles, engineering units).
-Language style: Conversational, helpful, direct Hinglish/English.
-CRITICAL INTEGRITY RULES:
-1. NEVER fabricate or guess numbers.
-2. ALWAYS execute tools to query plant metrics. Explain strictly from tool return data.
-3. Keep operational anomaly savings (Rs. 12,400/mo) strictly distinct from ToD scheduler savings (Rs. 47,500/mo). Do not mix or double count.
-4. If asked about unsupported features (e.g. load forecasting, weather prediction), state transparently that it is planned for Phase 2 and list the 4 verified tools you can run today."""
+Language style: Conversational, direct, professional Hinglish / English.
+
+CRITICAL INTEGRITY & DOMAIN RULES:
+1. STRICT DOMAIN BOUNDARY: You ONLY answer questions about industrial energy management, electricity bills, machine loads, power factor, ToD tariff schedules, and GHG carbon footprint.
+2. If asked an out-of-domain question (e.g. general knowledge, geography, coding, sports, weather, unrelated general chat), politely decline:
+   "Main sirf UrjaMind factory energy data, machine telemetry, ToD tariffs aur carbon compliance ke baare mein madad kar sakta hun."
+3. NEVER make up or hardcode numbers. You MUST call tools to retrieve data. Report strictly the values returned by the tools.
+4. Keep operational anomaly savings strictly separate from ToD scheduler savings. Do not mix or double-count them.
+5. If asked about unsupported capabilities (e.g. predictive load forecasting, real-time motor vibration sensors), state clearly that they are planned for Phase 2."""
+
 
 
 # ── 3. Agent Execution Engine ────────────────────────────────────────────────
@@ -238,7 +256,7 @@ def _fallback_tool_router(query: str) -> Dict[str, Any]:
         }
 
     # Scheduler / ToD optimization
-    if any(k in q for k in ["schedul", "tariff", "tod", "shift", "optimal", "or-tools", "furnace melt", "savings from schedule"]):
+    if any(k in q for k in ["schedul", "tariff", "tod", "shift", "opt", "or-tools", "furnace melt", "savings from schedule"]):
         data = run_optimizer(250.0)
         shifts_txt = "\n".join(
             f"• **{s['job']}**: {s['shift']} → **Save ₹{s['daily_saving_inr']:,}/day** (₹{s['monthly_saving_inr']:,}/mo)"
@@ -300,84 +318,127 @@ def _fallback_tool_router(query: str) -> Dict[str, Any]:
             "tool_result": data,
         }
 
-    # Default / Energy summary KPIs
-    data = get_kpis()
+    # 5. Energy summary / KPIs
+    if any(k in q for k in ["kpi", "bill", "energy", "consumption", "kwh", "power factor", "pf", "demand", "summary", "plant", "unit", "rupee", "cost", "overview"]):
+        data = get_kpis()
+        return {
+            "content": (
+                f"⚡ **{data['plant']} — Sep 2026 Summary**\n\n"
+                f"• Total Consumption: **{data['total_kwh']:,} kWh**\n"
+                f"• Total Electricity Bill: **₹{data['total_bill_inr']:,}** (Blended: ₹{data['blended_rate_inr_per_kwh']}/kWh)\n"
+                f"• Specific Energy: **{data['specific_energy_kwh_per_kg']} kWh/kg** (Baseline: {data['baseline_specific_energy']}, **+{data['deviation_pct']}%**)\n"
+                f"• Power Factor: **{data['power_factor']}** (Penalty: **₹{data['pf_penalty_inr']:,}**)\n\n"
+                f"**Quick Actions:**\n"
+                f"1. Type 'scheduler' to view CP-SAT ToD savings\n"
+                f"2. Type 'anomalies' to view operational waste alerts\n"
+                f"3. Type 'carbon' to view verified GHG Scope 1 & 2 audit report"
+            ),
+            "tool_called": "get_kpis",
+            "tool_result": data,
+        }
+
+    # 6. Greetings & Menu
+    if any(k in q for k in ["hi", "hello", "namaste", "help", "menu", "kya kar", "start", "kaise"]):
+        return {
+            "content": (
+                "Namaste! 🙏 Main UrjaMind ka AI Copilot hun.\n\n"
+                "Main aapke factory ke real analytical tools execute karke instant answers deta hun:\n"
+                "1. 📊 `kpi` — Total consumption & bill analysis\n"
+                "2. ⚠️ `anomalies` — Operational waste detection (Rs. 12,400/mo)\n"
+                "3. 🚀 `scheduler` — Google OR-Tools CP-SAT ToD shift (Rs. 47,500/mo)\n"
+                "4. 🌿 `carbon` — Scope 1 & 2 GHG Protocol audit\n\n"
+                "Aap mujhse seedhe pooch sakte hain, jaise: *'Bill kyun badha?'* ya *'Scheduler se kitna bachega?'*"
+            ),
+            "tool_called": None,
+            "tool_result": None,
+        }
+
+    # 7. Out-of-domain query rejection
     return {
         "content": (
-            f"⚡ **{data['plant']} — Sep 2026 Summary**\n\n"
-            f"• Total Consumption: **{data['total_kwh']:,} kWh**\n"
-            f"• Total Electricity Bill: **₹{data['total_bill_inr']:,}** (Blended: ₹{data['blended_rate_inr_per_kwh']}/kWh)\n"
-            f"• Specific Energy: **{data['specific_energy_kwh_per_kg']} kWh/kg** (Baseline: {data['baseline_specific_energy']}, **+{data['deviation_pct']}%**)\n"
-            f"• Power Factor: **{data['power_factor']}** (Penalty: **₹{data['pf_penalty_inr']:,}**)\n\n"
-            f"**Quick Actions:**\n"
-            f"1. Type 'scheduler' to view CP-SAT ₹47,500/mo ToD savings\n"
-            f"2. Type 'anomalies' to view 3 operational waste alerts (₹12,400/mo)\n"
-            f"3. Type 'carbon' to view verified GHG Scope 1 & 2 audit report"
+            "⚠️ **Out of Scope Query**\n\n"
+            "Main sirf UrjaMind factory energy data, machine telemetry, ToD tariffs aur carbon compliance ke baare mein madad kar sakta hun. "
+            "General knowledge, coding, ya unrelated sawaalon ka jawab mere domain mein nahi hai.\n\n"
+            "Aap bijli bill, machine waste ya tariff optimization ke baare mein pooch sakte hain!"
         ),
-        "tool_called": "get_kpis",
-        "tool_result": data,
+        "tool_called": None,
+        "tool_result": None,
     }
 
 
-def ask_agentic_copilot(user_message: str) -> Dict[str, Any]:
+def ask_agentic_copilot(
+    user_message: str,
+    chat_history: Optional[List[Dict[str, str]]] = None,
+) -> Dict[str, Any]:
     """
     Main copilot entry point:
-    If ANTHROPIC_API_KEY is available in environment, runs genuine Claude tool-use.
+    If ANTHROPIC_API_KEY is available in environment, runs genuine Claude multi-turn tool-use.
     Otherwise, runs deterministic tool-grounded fallback runner.
     """
     api_key = os.environ.get("ANTHROPIC_API_KEY")
+    model_name = os.environ.get("ANTHROPIC_MODEL", "claude-3-5-sonnet-latest")
 
     if api_key:
         try:
             import anthropic
             client = anthropic.Anthropic(api_key=api_key)
 
-            messages = [{"role": "user", "content": user_message}]
-            response = client.messages.create(
-                model="claude-3-5-sonnet-20241022",
-                max_tokens=1024,
-                system=SYSTEM_PROMPT,
-                tools=CLAUDE_TOOLS,
-                messages=messages,
-            )
+            # Build messages list incorporating chat history if provided
+            messages: List[Dict[str, Any]] = []
+            if chat_history:
+                for turn in chat_history[-6:]:  # last 3 conversational turns
+                    if turn.get("role") in ("user", "assistant") and turn.get("content"):
+                        messages.append({"role": turn["role"], "content": turn["content"]})
 
-            # Check if model wants to call tools
-            if response.stop_reason == "tool_use":
-                tool_calls = [c for c in response.content if c.type == "tool_use"]
-                tool_results = []
-                for tc in tool_calls:
-                    output = _execute_tool(tc.name, tc.input)
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": tc.id,
-                        "content": json.dumps(output),
-                    })
+            messages.append({"role": "user", "content": user_message})
+            tools_executed = []
 
-                # Send tool results back to Claude for final vernacular explanation
-                follow_up = client.messages.create(
-                    model="claude-3-5-sonnet-20241022",
+            # Multi-turn tool execution loop (up to 4 steps)
+            for _ in range(4):
+                response = client.messages.create(
+                    model=model_name,
                     max_tokens=1024,
                     system=SYSTEM_PROMPT,
                     tools=CLAUDE_TOOLS,
-                    messages=messages + [{"role": "assistant", "content": response.content}, {"role": "user", "content": tool_results}],
+                    messages=messages,
                 )
 
-                text_blocks = [b.text for b in follow_up.content if hasattr(b, "text")]
-                return {
-                    "role": "bot",
-                    "content": "\n\n".join(text_blocks),
-                    "engine": "claude-tool-calling",
-                    "tools_executed": [tc.name for tc in tool_calls],
-                }
+                if response.stop_reason == "tool_use":
+                    tool_calls = [c for c in response.content if c.type == "tool_use"]
+                    tool_results = []
+                    for tc in tool_calls:
+                        output = _execute_tool(tc.name, tc.input)
+                        tools_executed.append(tc.name)
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": tc.id,
+                            "content": json.dumps(output),
+                        })
 
-            # If model answered directly
+                    # Append assistant message with tool calls and user message with tool results
+                    messages.append({"role": "assistant", "content": response.content})
+                    messages.append({"role": "user", "content": tool_results})
+                else:
+                    # Final response generated
+                    text_blocks = [b.text for b in response.content if hasattr(b, "text")]
+                    return {
+                        "role": "bot",
+                        "content": "\n\n".join(text_blocks),
+                        "engine": f"claude-tool-calling ({model_name})",
+                        "tool_called": tools_executed[-1] if tools_executed else None,
+                        "tools_executed": tools_executed,
+                    }
+
+            # If loop finished with final text
             text_blocks = [b.text for b in response.content if hasattr(b, "text")]
             return {
                 "role": "bot",
                 "content": "\n\n".join(text_blocks),
-                "engine": "claude-direct",
-                "tools_executed": [],
+                "engine": f"claude-tool-calling ({model_name})",
+                "tool_called": tools_executed[-1] if tools_executed else None,
+                "tools_executed": tools_executed,
             }
+
         except Exception as e:
             # Fall back gracefully to deterministic tool runner
             fb = _fallback_tool_router(user_message)
@@ -390,6 +451,7 @@ def ask_agentic_copilot(user_message: str) -> Dict[str, Any]:
     fb["role"] = "bot"
     fb["engine"] = "deterministic-tool-runner"
     return fb
+
 
 
 if __name__ == "__main__":

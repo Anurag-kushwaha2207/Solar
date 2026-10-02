@@ -1,6 +1,7 @@
 import hashlib
 import json
 from fastapi import APIRouter
+from active_data import active_plant
 from constants import (
     PLANT_NAME, REPORT_PERIOD, MONTHS_6,
     CEA_EMISSION_FACTOR_KG_PER_KWH, EF_SOURCE, GRID_REGION,
@@ -18,17 +19,27 @@ router = APIRouter()
 
 @router.get("/report")
 async def get_report(plant_id: int = 1):
+    current_kwh = active_plant.total_kwh
+    sep_scope2 = round(current_kwh * CEA_EMISSION_FACTOR_KG_PER_KWH / 1000, 2)
+    sep_total = round(sep_scope2 + SEP_SCOPE1_TCO2E, 2)
+    sep_intensity = round(sep_total * 1000 / SEP_PRODUCTION_KG, 3)
+
+    monthly_kwh = list(MONTHLY_KWH)
+    monthly_kwh[-1] = int(current_kwh)
+    monthly_scope2 = list(MONTHLY_SCOPE2)
+    monthly_scope2[-1] = sep_scope2
+
     total_scope1 = round(sum(MONTHLY_SCOPE1), 2)
-    total_scope2 = round(sum(MONTHLY_SCOPE2), 2)
+    total_scope2 = round(sum(monthly_scope2), 2)
 
     audit_payload = {
         "plant": PLANT_NAME,
         "period": REPORT_PERIOD,
-        "kwh": SEP_TOTAL_KWH,
+        "kwh": current_kwh,
         "emission_factor": CEA_EMISSION_FACTOR_KG_PER_KWH,
         "scope1_tco2e": SEP_SCOPE1_TCO2E,
-        "scope2_tco2e": SEP_SCOPE2_TCO2E,
-        "total_tco2e": SEP_TOTAL_TCO2E,
+        "scope2_tco2e": sep_scope2,
+        "total_tco2e": sep_total,
         "production_kg": SEP_PRODUCTION_KG,
     }
     report_sha256 = hashlib.sha256(json.dumps(audit_payload, sort_keys=True).encode()).hexdigest()
@@ -40,13 +51,13 @@ async def get_report(plant_id: int = 1):
         "period":   REPORT_PERIOD,
         "report_sha256": report_sha256,
         "scope2": {
-            "monthly_tco2e":    MONTHLY_SCOPE2,
-            "sep_tco2e":        SEP_SCOPE2_TCO2E,
+            "monthly_tco2e":    monthly_scope2,
+            "sep_tco2e":        sep_scope2,
             "total_tco2e":      total_scope2,
             "method":           "Location-based",
             "emission_factor":  CEA_EMISSION_FACTOR_KG_PER_KWH,
             "ef_source":        EF_SOURCE,
-            "calc_sep":         f"{SEP_TOTAL_KWH:,} kWh × {CEA_EMISSION_FACTOR_KG_PER_KWH} kg/kWh ÷ 1000 = {SEP_SCOPE2_TCO2E} tCO₂e",
+            "calc_sep":         f"{int(current_kwh):,} kWh × {CEA_EMISSION_FACTOR_KG_PER_KWH} kg/kWh ÷ 1000 = {sep_scope2} tCO₂e",
         },
         "scope1": {
             "monthly_tco2e":    MONTHLY_SCOPE1,
@@ -58,10 +69,10 @@ async def get_report(plant_id: int = 1):
         "combined": {
             "months":                   MONTHS_6,
             "scope1":                   MONTHLY_SCOPE1,
-            "scope2":                   MONTHLY_SCOPE2,
+            "scope2":                   monthly_scope2,
             "total_tco2e":              round(total_scope1 + total_scope2, 2),
-            "sep_total":                SEP_TOTAL_TCO2E,
-            "intensity_kg_per_kg":      SEP_EMISSION_INTENSITY,
+            "sep_total":                sep_total,
+            "intensity_kg_per_kg":      sep_intensity,
             "projected_saving_tco2e":   PROJECTED_SAVING_TCO2E_YEAR,
         },
         "mv_table": [

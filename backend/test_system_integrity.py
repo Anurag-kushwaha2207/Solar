@@ -1,82 +1,190 @@
+"""
+UrjaMind Verification & Integrity Test Suite
+============================================
+Run via:
+  pytest test_system_integrity.py
+or:
+  python test_system_integrity.py
+"""
+import pytest
 from fastapi.testclient import TestClient
-import sys
 from main import app
+from active_data import active_plant
 
-def run_tests():
-    print("Running UrjaMind Verification Suite...")
-    client = TestClient(app)
+client = TestClient(app)
 
-    # 1. KPIs
+
+def setup_function():
+    """Ensure clean baseline before each test."""
+    active_plant.reset_to_demo()
+
+
+def test_kpis():
+    """1. KPIs: 48,240 kWh and valid bill amounts."""
     r = client.get("/api/dashboard/kpis")
     assert r.status_code == 200, f"KPIs failed: {r.status_code}"
-    res_kpis = r.json()
-    k_data = res_kpis["kpis"]
-    print(f"[PASS] 1. KPIs: {k_data['total_kwh']} kWh, Bill: INR {k_data['total_amount_inr']}")
+    k_data = r.json()["kpis"]
+    assert k_data["total_kwh"] == 48240
+    assert k_data["total_amount_inr"] == 296500
 
 
-    # 2. Anomaly Alerts (Strictly 3 operational faults, no double count)
+def test_anomalies_no_double_counting():
+    """2. Anomaly Alerts: exactly Rs. 12,400 across 3 faults; no furnace ToD shift double count."""
     r = client.get("/api/anomaly/alerts")
     assert r.status_code == 200
     anomalies = r.json()
     assert anomalies["total_potential_saving_inr"] == 12400, f"Expected 12400, got {anomalies['total_potential_saving_inr']}"
     furnace_alerts = [a for a in anomalies["alerts"] if "furnace" in a["title"].lower() and "tod" in a["title"].lower()]
     assert len(furnace_alerts) == 0, "Furnace ToD alert found in anomalies (double counting)!"
-    print(f"[PASS] 2. Anomalies: {len(anomalies['alerts'])} faults, total saving INR {anomalies['total_potential_saving_inr']} (no double counting)")
 
 
-    # 3. Scheduler optimize & methods
+def test_scheduler_cpsat():
+    """3. Scheduler (CP-SAT): exact Rs. 47,500/mo tariff shift savings."""
     r = client.post("/api/scheduler/optimize", json={"plant_id": 1, "max_demand_kva": 250.0, "optimize_method": "cpsat"})
     assert r.status_code == 200
     sched = r.json()
     assert sched["saving_inr_month"] == 47500.0
-    print(f"[PASS] 3. Scheduler (CP-SAT): Saving INR {sched['saving_inr_month']}, Cost/day: INR {sched['optimal_cost_inr']}")
+    assert sched["status"] == "optimal"
 
+
+def test_scheduler_benchmark_greedy_diff():
+    """4. Scheduler Benchmark: CP-SAT and Greedy are independent and distinct."""
     r = client.get("/api/scheduler/methods")
     assert r.status_code == 200
     methods = r.json()["methods"]
     assert len(methods) == 2
     assert methods[0]["saving"] != methods[1]["saving"], "CP-SAT and Greedy have identical savings!"
-    print(f"[PASS] 4. Scheduler Benchmark: {methods[0]['method']} = INR {methods[0]['saving']} vs {methods[1]['method']} = INR {methods[1]['saving']} (distinct & verified)")
 
-    # 4. NILM Resolution Ablation
+
+def test_nilm_resolution_ablation():
+    """5. NILM Ablation: Empirical scikit-learn simulation without time-of-day memorization."""
     r = client.get("/api/nilm/resolution-ablation")
     assert r.status_code == 200
     ablation = r.json()
     assert ablation["status"] == "COMPLETED"
-    print(f"[PASS] 5. NILM Ablation (scikit-learn): {len(ablation['ablation'])} resolutions evaluated. 15-min Macro R2 = {ablation['ablation'][1]['macro_r2']}")
+    assert len(ablation["ablation"]) == 3
+    # Check that it's labeled as simulation benchmark
+    assert "Synthetic" in ablation["dataset"] or "Simulation" in ablation.get("phase", "")
 
-    # 5. Agentic Copilot
+
+def test_copilot_solver_integration():
+    """6. Copilot Solver Integration: Answered with solver saving Rs. 47,500."""
     r = client.post("/api/copilot/ask", json={"question": "Scheduler se kitna bachega?"})
     assert r.status_code == 200
     copilot_ans = r.json()
-    assert "47,500" in copilot_ans["answer"] or "47500" in copilot_ans["answer"], f"Expected 47,500 in copilot answer, got: {copilot_ans['answer']}"
-    print(f"[PASS] 6. Copilot Solver Integration: Answered with solver saving 47,500 using tool {copilot_ans['tool_used']}")
+    assert "47,500" in copilot_ans["answer"] or "47500" in copilot_ans["answer"]
 
-    # 6. Copilot Honest Rejection
+
+def test_copilot_rejection_unsupported():
+    """7. Copilot Rejection: Honestly declined unsupported query (load forecast)."""
     r = client.post("/api/copilot/ask", json={"question": "Kal ka load forecast kya hai?"})
     assert r.status_code == 200
     forecast_ans = r.json()
-    assert "phase 2" in forecast_ans["answer"].lower() or "forecast" in forecast_ans["answer"].lower() or "support" in forecast_ans["answer"].lower()
-    print("[PASS] 7. Copilot Rejection: Honestly declined unsupported query (load forecast)")
+    ans = forecast_ans["answer"].lower()
+    assert "phase 2" in ans or "forecast" in ans or "support" in ans or "planned" in ans
 
-    # 7. WhatsApp Webhook
+
+def test_copilot_out_of_domain():
+    """8. Copilot Out of Domain: Strict rejection for non-energy queries."""
+    r = client.post("/api/copilot/ask", json={"question": "What is the capital of France?"})
+    assert r.status_code == 200
+    ans = r.json()["answer"].lower()
+    assert "out of scope" in ans or "energy" in ans or "rajkot" in ans or "plant" in ans
+
+
+def test_whatsapp_webhook():
+    """9. WhatsApp Webhook: Received message, executed tool, returned response."""
     r = client.post("/api/whatsapp/webhook", json={"From": "whatsapp:+919837101838", "Body": "opt"})
     assert r.status_code == 200
     wa_res = r.json()
     assert "47,500" in wa_res["response"] or "47500" in wa_res["response"]
-    print("[PASS] 8. WhatsApp Webhook: Received message from +919837101838, executed run_optimizer, returned answer")
 
-    # 8. Meter upload with demo fallback
+
+def test_meter_upload_fallback():
+    """10. Upload Fallback: Invalid file explicitly returns demo_values_used."""
     r = client.post("/api/ingest/upload-meter-data", files={"file": ("test.txt", b"random content", "text/plain")})
     assert r.status_code == 200
     res = r.json()
-    assert res["mode"] == "demo_values_used", f"Expected mode demo_values_used, got: {res}"
-    print(f"[PASS] 9. Upload Fallback: Invalid file explicitly returns status '{res['status']}' and mode '{res['mode']}'")
+    assert res["mode"] == "demo_values_used"
 
-    print("\n==========================================")
-    print("ALL 9 INTEGRITY VERIFICATION CHECKS PASSED!")
-    print("==========================================")
+
+def test_carbon_report():
+    """11. Carbon Footprint: CEA emission factor 0.716 and valid SHA-256 digest."""
+    r = client.get("/api/carbon/report")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["scope2"]["emission_factor"] == 0.716
+    assert len(data["report_sha256"]) == 64
+
+
+def test_cross_module_sync_on_upload():
+    """12. Cross-Module Sync: Uploading new data synchronizes Dashboard, Carbon, Scheduler and Copilot."""
+    csv_sample = (
+        "timestamp,total_kwh,total_kw,power_factor\n"
+        "2026-09-01 00:00:00,20.0,80.0,0.92\n"
+        "2026-09-01 00:15:00,22.0,88.0,0.91\n"
+        "2026-09-01 00:30:00,18.0,72.0,0.93\n"
+    )
+    r = client.post(
+        "/api/ingest/upload-meter-data",
+        files={"file": ("custom_meter.csv", csv_sample.encode("utf-8"), "text/csv")},
+    )
+    assert r.status_code == 200
+    upload_res = r.json()
+    assert upload_res["mode"] == "data_parsed"
+    assert active_plant.total_kwh == 60.0
+
+    # Verify Dashboard reads 60.0 kWh
+    dash_r = client.get("/api/dashboard/kpis")
+    assert dash_r.json()["kpis"]["total_kwh"] == 60.0
+
+    # Verify Carbon reads 60.0 kWh
+    carbon_r = client.get("/api/carbon/report")
+    assert carbon_r.json()["scope2"]["calc_sep"].startswith("60 kWh")
+
+    # Verify Copilot reads 60.0 kWh
+    copilot_r = client.post("/api/copilot/ask", json={"question": "Total energy kitni hai?"})
+    assert "60" in copilot_r.json()["answer"]
+
+    # Reset active plant data back to demo baseline
+    active_plant.reset_to_demo()
+    assert active_plant.total_kwh == 48240
+
+
+def run_tests():
+    """Execute all tests programmatically."""
+    tests = [
+        ("1. KPIs", test_kpis),
+        ("2. Anomalies (No double count)", test_anomalies_no_double_counting),
+        ("3. Scheduler (CP-SAT)", test_scheduler_cpsat),
+        ("4. Scheduler Benchmark (CP-SAT vs Greedy)", test_scheduler_benchmark_greedy_diff),
+        ("5. NILM Resolution Ablation", test_nilm_resolution_ablation),
+        ("6. Copilot Solver Integration", test_copilot_solver_integration),
+        ("7. Copilot Rejection (Unsupported)", test_copilot_rejection_unsupported),
+        ("8. Copilot Out of Domain", test_copilot_out_of_domain),
+        ("9. WhatsApp Webhook", test_whatsapp_webhook),
+        ("10. Upload Fallback", test_meter_upload_fallback),
+        ("11. Carbon Report", test_carbon_report),
+        ("12. Cross-Module Sync", test_cross_module_sync_on_upload),
+    ]
+
+    print("\nRunning UrjaMind Test & Verification Suite...")
+    passed = 0
+    for name, fn in tests:
+        try:
+            setup_function()
+            fn()
+            print(f"[PASS] {name}")
+            passed += 1
+        except Exception as e:
+            print(f"[FAIL] {name}: {e}")
+
+    print(f"\n==========================================")
+    print(f"VERIFICATION SUMMARY: {passed}/{len(tests)} TESTS PASSED")
+    print(f"==========================================\n")
+    if passed < len(tests):
+        exit(1)
+
 
 if __name__ == "__main__":
     run_tests()
-

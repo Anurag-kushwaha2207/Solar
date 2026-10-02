@@ -1,7 +1,9 @@
 """Scheduler router — wired to real CP-SAT optimiser & Greedy heuristic"""
 from fastapi import APIRouter
 from pydantic import BaseModel
-from cpsat_scheduler import solve_cpsat, _fallback_greedy, DEMO_JOBS, ORTOOLS_AVAILABLE
+from cpsat_scheduler import solve_cpsat, _fallback_greedy, get_plant_jobs, DEMO_JOBS, ORTOOLS_AVAILABLE
+from active_data import active_plant
+from constants import SEP_TOTAL_KWH
 
 router = APIRouter()
 
@@ -14,10 +16,16 @@ class ScheduleRequest(BaseModel):
     off_peak_priority: bool = True
 
 
+def _current_jobs():
+    scale = active_plant.total_kwh / max(1.0, float(SEP_TOTAL_KWH))
+    return get_plant_jobs(scale)
+
+
 @router.get("/jobs")
 async def get_jobs(plant_id: int = 1):
     """Return current schedule (no optimization) with summary."""
-    result = solve_cpsat(DEMO_JOBS, max_demand_kva=250.0, time_limit_s=5.0)
+    jobs = _current_jobs()
+    result = solve_cpsat(jobs, max_demand_kva=250.0, time_limit_s=5.0)
     return {
         "ortools_available": ORTOOLS_AVAILABLE,
         "jobs": result.jobs,
@@ -35,10 +43,11 @@ async def get_jobs(plant_id: int = 1):
 @router.post("/optimize")
 async def optimize(req: ScheduleRequest):
     """Run real CP-SAT or Greedy optimisation and return result."""
+    jobs = _current_jobs()
     if req.optimize_method.lower() == "greedy":
-        result = _fallback_greedy(DEMO_JOBS, max_demand_kva=req.max_demand_kva)
+        result = _fallback_greedy(jobs, max_demand_kva=req.max_demand_kva)
     else:
-        result = solve_cpsat(DEMO_JOBS, max_demand_kva=req.max_demand_kva, time_limit_s=5.0)
+        result = solve_cpsat(jobs, max_demand_kva=req.max_demand_kva, time_limit_s=5.0)
 
     return {
         "method":            result.method,
@@ -64,8 +73,9 @@ async def optimize(req: ScheduleRequest):
 @router.get("/methods")
 async def compare_methods(max_demand_kva: float = 250.0):
     """Compare real CP-SAT vs real Greedy heuristic."""
-    cpsat_res = solve_cpsat(DEMO_JOBS, max_demand_kva=max_demand_kva, time_limit_s=5.0)
-    greedy_res = _fallback_greedy(DEMO_JOBS, max_demand_kva=max_demand_kva)
+    jobs = _current_jobs()
+    cpsat_res = solve_cpsat(jobs, max_demand_kva=max_demand_kva, time_limit_s=5.0)
+    greedy_res = _fallback_greedy(jobs, max_demand_kva=max_demand_kva)
     return {
         "methods": [
             {

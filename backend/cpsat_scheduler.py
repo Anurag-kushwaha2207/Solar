@@ -131,6 +131,34 @@ DEMO_JOBS: List[Job] = [
 ]
 
 
+def get_plant_jobs(scale_factor: float = 1.0) -> List[Job]:
+    """
+    Return equipment jobs, proportionally scaling flexible runtimes
+    if user has uploaded new interval CSV or bill data.
+    """
+    if abs(scale_factor - 1.0) < 0.01:
+        return DEMO_JOBS
+    scaled = []
+    for j in DEMO_JOBS:
+        if not j.is_flexible:
+            scaled.append(j)
+            continue
+        new_slots = max(1, min(96, int(round(j.duration_slots * scale_factor))))
+        new_deadline = max(j.deadline_slot, (j.earliest_slot or 0) + new_slots)
+        scaled.append(Job(
+            name=j.name,
+            machine=j.machine,
+            power_kw=j.power_kw,
+            duration_slots=new_slots,
+            deadline_slot=min(96, new_deadline),
+            earliest_slot=j.earliest_slot,
+            is_flexible=j.is_flexible,
+            fixed_start=j.fixed_start,
+            current_start=j.current_start,
+        ))
+    return scaled
+
+
 def _job_current_start(j: Job) -> int:
     if j.fixed_start is not None:
         return j.fixed_start
