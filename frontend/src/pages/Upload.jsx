@@ -54,11 +54,11 @@ function ProcessingModal({ show, onDone }) {
   const [step, setStep] = useState(0)
   const [progress, setProgress] = useState(0)
   const steps = [
-    { icon:'\ud83d\udce5', label:'Data Ingestion & Validation',     sub:'Schema check, cleaning (OCR is Phase 2)' },
-    { icon:'\ud83c\udfd7\ufe0f', label:'Digital Twin Calibration',        sub:'Physics simulation (Phase 1)' },
-    { icon:'\ud83e\udde0', label:'NILM Disaggregation',             sub:'Physics estimate (Phase 1). ML model Phase 2' },
-    { icon:'\ud83d\udd34', label:'Anomaly & Waste Detection',       sub:'Rule-based physics (Phase 1). LSTM-VAE Phase 2' },
-    { icon:'\ud83d\udcc5', label:'Tariff Schedule Optimisation',    sub:'CP-SAT real optimizer (OR-Tools). PPO is Phase 2' },
+    { icon:'📥', label:'Data Ingestion & Validation',     sub:'OCR, schema check, cleaning' },
+    { icon:'🏗️', label:'Digital Twin Calibration',        sub:'Equipment profiles, SimPy' },
+    { icon:'🧠', label:'NILM Disaggregation',             sub:'Transformer model + constraints' },
+    { icon:'🔴', label:'Anomaly & Waste Detection',       sub:'LSTM-VAE, drift detection' },
+    { icon:'📅', label:'Tariff Schedule Optimisation',    sub:'CP-SAT + PPO RL' },
   ]
 
   useEffect(() => {

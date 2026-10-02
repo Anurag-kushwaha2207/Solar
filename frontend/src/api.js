@@ -21,10 +21,9 @@ export const fetchAnomalies    = ()      => api.get('/anomaly/alerts').then(r =>
 export const resolveAnomaly    = (id)    => api.post(`/anomaly/resolve/${id}`).then(r => r.data)
 
 // ── Scheduler ──────────────────────────────────────────────────────────────
-export const fetchJobs                = ()     => api.get('/scheduler/jobs').then(r => r.data)
-export const optimizeSchedule         = (body) => api.post('/scheduler/optimize', body).then(r => r.data)
-export const compareSchedulerMethods  = ()     => api.get('/scheduler/compare').then(r => r.data)
-
+export const fetchJobs            = ()      => api.get('/scheduler/jobs').then(r => r.data)
+export const optimizeSchedule     = (body)  => api.post('/scheduler/optimize', body).then(r => r.data)
+export const fetchScheduleMethods = (md=250) => api.get(`/scheduler/methods?max_demand_kva=${md}`).then(r => r.data)
 
 // ── Carbon ─────────────────────────────────────────────────────────────────
 export const fetchCarbonReport = ()      => api.get('/carbon/report').then(r => r.data)

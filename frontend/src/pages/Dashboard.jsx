@@ -66,7 +66,7 @@ function AlertCard({ alert, onResolve }) {
 function Copilot() {
   const [msgs, setMsgs] = useState([{
     role:'bot',
-    content:'Namaste! 🙏 Main aapka UrjaMind Copilot hun. Rajkot Foundry ka data analyze ho gaya hai.\n\nIs mahine **4 anomalies** detect hui hain — potential saving: **₹22,800/month**\n\nKoi bhi sawaal pucho!'
+    content:'Namaste! 🙏 Main aapka UrjaMind Copilot hun. Rajkot Foundry ka data analyze ho gaya hai.\n\nIs mahine **4 anomalies** detect hui hain — potential saving: **₹22,600/month**\n\nKoi bhi sawaal pucho!'
   }])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)

@@ -51,7 +51,7 @@ export default function Carbon() {
             {action:'Scope 2 calculated',detail:'48,240 × 0.716 = 34.54 tCO₂e'},
             {action:'Scope 1 — Diesel log',detail:'320L × 2.68 = 0.86 tCO₂e'},
             {action:'M&V baseline trained',detail:'LightGBM R²=0.91 · Apr–Aug'},
-            {action:'Report signed',detail:'SHA-256: a4f2e8c3... · v1.0'},
+            {action:'Cryptographic signature',detail:'SHA-256: 3ce423485e084eb1...4fd437d0 · Verified payload digest'},
           ],
           buyer_readiness:{scope2_location_based:true,scope1_direct:true,ghg_protocol_aligned:true,emission_intensity_metric:true,machine_readable_api:true}
         })

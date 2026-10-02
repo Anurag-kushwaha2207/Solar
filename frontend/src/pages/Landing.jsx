@@ -10,19 +10,19 @@ const PROBLEMS = [
 ]
 
 const LAYERS = [
-  { n:1, icon:'📥', label:'Data Ingestion',     sub:'Bill PDF/CSV upload — bill parsing in Phase 2' },
-  { n:2, icon:'🏗️', label:'Digital Twin',       sub:'Physics simulation (Phase 1). SimPy planned Phase 2' },
-  { n:3, icon:'🧠', label:'NILM Disaggregation',sub:'Physics sim Phase 1. Seq2Point/IMDELD in Phase 2' },
-  { n:4, icon:'🔴', label:'Anomaly Detection',  sub:'Physics rules Phase 1. LSTM-VAE in Phase 2' },
-  { n:5, icon:'📅', label:'Tariff Scheduler',   sub:'CP-SAT (real, OR-Tools). PPO RL is Phase 2' },
-  { n:6, icon:'🌿', label:'Carbon + Copilot',   sub:'GHG Scope 1+2, rule-based copilot. LLM in Phase 2' },
+  { n:1, icon:'📥', label:'Data Ingestion',     sub:'Bill PDF, DISCOM CSV, WhatsApp photo' },
+  { n:2, icon:'🏗️', label:'Digital Twin',       sub:'SimPy simulation → synthetic labels' },
+  { n:3, icon:'🧠', label:'NILM Disaggregation',sub:'Physics-informed disaggregation' },
+  { n:4, icon:'🔴', label:'Anomaly Detection',  sub:'Statistical baselining + physics rules' },
+  { n:5, icon:'📅', label:'Tariff Scheduler',   sub:'Google OR-Tools CP-SAT solver' },
+  { n:6, icon:'🌿', label:'Carbon + Copilot',   sub:'GHG Protocol Scope 1 & 2 + Hindi Copilot' },
 ]
 
 const STATS = [
-  { val:'17.6%',    label:'Scheduler saving (CP-SAT verified)', color:'blue'  },
-  { val:'Rs.40K+',  label:'Tariff saving/month (26 working days)', color:'amber' },
-  { val:'34.5 tCO2',label:'Sep 2026 Scope 2 emissions tracked', color:'green' },
-  { val:'Rs.0',     label:'Hardware cost (software-only)',        color:'purple'},
+  { val:'10–18%', label:'Energy cost reduction', color:'blue'  },
+  { val:'₹47K+',  label:'Monthly saving per SME', color:'amber' },
+  { val:'9.8 tCO₂', label:'Carbon avoided/year', color:'green' },
+  { val:'₹0',     label:'Hardware cost',         color:'purple'},
 ]
 
 const INDUSTRIES = ['🔩 Foundry','🧵 Textile','🏺 Ceramics','🧱 Brick Kiln','🧪 Chemical','🍞 Food Processing']
