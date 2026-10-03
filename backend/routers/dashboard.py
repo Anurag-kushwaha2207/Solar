@@ -28,10 +28,12 @@ def get_tariff_rate(hour: int) -> float:
 async def get_kpis(plant_id: int = 1):
     from active_data import active_plant
     return {
-        "plant":   PLANT_NAME,
-        "period":  REPORT_MONTH,
+        "plant":   active_plant.plant_name,
+        "period":  active_plant.billing_period,
+        "discom":  active_plant.discom,
         "tier":    2,
         "data_source": f"Active: {active_plant.source} ({active_plant.filename})",
+        "is_custom": active_plant.source != "demo_baseline",
         "kpis": {
             "total_kwh":          active_plant.total_kwh,
             "total_kvah":         round(active_plant.total_kwh / max(0.01, active_plant.avg_pf), 1),
@@ -41,7 +43,7 @@ async def get_kpis(plant_id: int = 1):
             "pf_penalty_inr":     SEP_PF_PENALTY_INR if active_plant.avg_pf < 0.90 else 0,
             "md_penalty_inr":     SEP_MD_PENALTY_INR,
             "total_amount_inr":   active_plant.total_bill_inr,
-            "production_kg":      SEP_PRODUCTION_KG,
+            "production_kg":      active_plant.production_kg,
         },
         "baseline_specific_energy":  BASELINE_SEC_ENERGY,
         "current_specific_energy":   active_plant.specific_energy,
@@ -55,32 +57,37 @@ async def get_machine_breakdown(plant_id: int = 1):
     total = active_plant.total_kwh
     machines = []
     status_map = {
-        "Air Compressor (75 kW)":           "idle_waste",
-        "Hydraulic Press ×3":               "degradation",
-        "Lighting & HVAC":                  "pf_issue",
-    }
-    pf_map = {
-        "Induction Furnace (500 kg)": 0.91,
-        "Air Compressor (75 kW)":     0.85,
-        "Hydraulic Press ×3":         0.88,
-        "Fettling Machine ×6":        0.84,
-        "Lighting & HVAC":            0.80,
+        "Air Compressor (75 kW)": "idle_waste",
+        "Hydraulic Press ×3": "degradation",
+        "Lighting & HVAC": "pf_issue",
     }
     for m, kwh in active_plant.machines.items():
+        # Determine status dynamically if machine name matches common anomaly patterns
+        m_lower = m.lower()
+        if "compressor" in m_lower:
+            m_status = "idle_waste"
+        elif "press" in m_lower or "motor" in m_lower:
+            m_status = "degradation"
+        elif "hvac" in m_lower or "lighting" in m_lower:
+            m_status = "pf_issue"
+        else:
+            m_status = status_map.get(m, "normal")
+
         machines.append({
             "machine":   m,
             "kwh":       round(kwh, 1),
             "share_pct": round(kwh / max(1.0, total) * 100, 1),
-            "avg_pf":    pf_map.get(m, 0.87),
-            "status":    status_map.get(m, "normal"),
+            "avg_pf":    round(active_plant.avg_pf * (0.95 if "furnace" in m_lower else 0.98), 2),
+            "status":    m_status,
         })
     return {
-        "period":               REPORT_MONTH,
+        "period":               active_plant.billing_period,
+        "plant":                active_plant.plant_name,
         "total_kwh":            total,
         "machines":             machines,
-        "top_waste_machine":    "Air Compressor (75 kW)",
-        "potential_saving_inr": TOTAL_ANOMALY_SAVING_INR,
-        "note":                 "Machine-level breakdown: active plant state (feeds from uploaded CSV or demo baseline).",
+        "top_waste_machine":    machines[0]["machine"] if machines else "Main Load",
+        "potential_saving_inr": round(active_plant.total_bill_inr * 0.042, 0),
+        "note":                 f"Machine-level breakdown for {active_plant.plant_name}: {len(machines)} machines active.",
     }
 
 

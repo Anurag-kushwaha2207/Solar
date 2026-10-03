@@ -67,22 +67,25 @@ function AlertCard({ alert, onResolve }) {
 // ── Copilot Panel ────────────────────────────────────────────────────────────
 function Copilot({ kpis }) {
   const currentKwh = kpis?.kpis?.total_kwh || 48240
-  const isCustom = kpis?.data_source && !kpis.data_source.includes('demo_baseline')
+  const isCustom = kpis?.is_custom || (kpis?.data_source && !kpis.data_source.includes('demo_baseline'))
+  const plantName = kpis?.plant || (isCustom ? 'My Industrial Plant' : 'Rajkot Foundry')
 
-  const [msgs, setMsgs] = useState([{
-    role:'bot',
-    content: isCustom
-      ? `Namaste! 🙏 Main aapka UrjaMind Copilot hun. Uploaded plant data (${currentKwh.toLocaleString()} kWh) analyze ho gaya hai.\n\nLive analytical tools execute karke instant answers deta hun. Koi bhi sawaal pucho!`
-      : 'Namaste! 🙏 Main aapka UrjaMind Copilot hun. Rajkot Foundry ka data analyze ho gaya hai.\n\nIs mahine **3 operational anomalies** detect hui hain — potential saving: **₹12,400/month** (Scheduler tab mein ToD optimization se ₹47,500/month alag se potential hai).\n\nKoi bhi sawaal pucho!'
-  }])
+  const [msgs, setMsgs] = useState([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [quickQs, setQuickQs] = useState([])
   const endRef = useRef()
 
   useEffect(() => {
+    const welcome = isCustom
+      ? `Namaste! 🙏 Main aapka UrjaMind Copilot hun. **${plantName}** ka uploaded data (${currentKwh.toLocaleString()} kWh) analyze ho gaya hai.\n\nSaman (machines), bijli bill aur ToD savings ke baare mein koi bhi sawaal pucho!`
+      : `Namaste! 🙏 Main aapka UrjaMind Copilot hun. **${plantName}** ka data analyze ho gaya hai.\n\nIs mahine **3 operational anomalies** detect hui hain — potential saving: **₹12,400/month** (Scheduler tab mein ToD optimization se ₹47,500/month alag se potential hai).\n\nKoi bhi sawaal pucho!`
+    setMsgs([{ role: 'bot', content: welcome }])
+  }, [kpis?.plant, kpis?.kpis?.total_kwh, isCustom])
+
+  useEffect(() => {
     fetchQuickQs().then(setQuickQs).catch(() =>
-      setQuickQs(['Bill kyun badha?','Compressor problem?','Total saving kitna?','Carbon report?'])
+      setQuickQs(['Bill kyun badha?','Machine breakdown?','Compressor problem?','Total saving kitna?'])
     )
   }, [])
 
@@ -127,7 +130,7 @@ function Copilot({ kpis }) {
         <div>
           <div className="copilot-name">UrjaMind Copilot</div>
           <div className="copilot-status">
-            ● Online · {isCustom ? `Active: ${currentKwh.toLocaleString()} kWh` : 'Demo (48,240 kWh)'}
+            ● Online · {plantName} ({currentKwh.toLocaleString()} kWh)
           </div>
         </div>
       </div>
@@ -216,12 +219,12 @@ export default function Dashboard() {
             <div>
               <h1 className="section-title">Energy Intelligence Dashboard</h1>
               <p style={{color:'var(--text2)',fontSize:13,marginTop:4,display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-                <span>Rajkot Foundry</span>
+                <span style={{fontWeight:600,color:'var(--text)'}}>{kpis?.plant || 'Rajkot Foundry'}</span>
                 <span>·</span>
-                <span>Sep 2026</span>
+                <span>{kpis?.period || 'Sep 2026'}</span>
                 <span>·</span>
-                <span className="badge badge-blue" style={{fontSize:11}}>
-                  ⚡ Baseline Physics Model (Phase 1)
+                <span className={`badge ${kpis?.is_custom ? 'badge-green' : 'badge-blue'}`} style={{fontSize:11}}>
+                  {kpis?.is_custom ? `📁 Custom Data (${kpis?.kpis?.total_kwh?.toLocaleString()} kWh)` : '⚡ Baseline Physics Model'}
                 </span>
               </p>
             </div>

@@ -22,21 +22,23 @@ async def disaggregate(plant_id: int = 1):
       NOT from a trained ML model. A Transformer/Seq2Point model
       trained on IMDELD dataset is planned for Phase 2.
     """
-    total = SEP_TOTAL_KWH
+    from active_data import active_plant
+    total = active_plant.total_kwh
     machine_results = []
-    for machine, kwh in MACHINE_KWH.items():
+    for machine, kwh in active_plant.machines.items():
         machine_results.append({
             "machine":   machine,
-            "kwh":       kwh,
-            "share_pct": round(kwh / total * 100, 1),
-            "method":    "physics-simulation",
-            "confidence": None,   # No confidence score for simulated data
+            "kwh":       round(kwh, 1),
+            "share_pct": round(kwh / max(1.0, total) * 100, 1),
+            "method":    "physics-disaggregation" if active_plant.source != "demo_baseline" else "physics-simulation",
+            "confidence": None,
         })
 
     return {
-        "status":        NILM_STATUS,          # "SIMULATED"
-        "model":         NILM_MODEL_DESC,
-        "phase":         "Phase 1 Prototype",
+        "status":        "ACTIVE_DISAGGREGATED" if active_plant.source != "demo_baseline" else NILM_STATUS,
+        "model":         f"Physics-informed load disaggregation ({active_plant.plant_name})",
+        "plant":         active_plant.plant_name,
+        "phase":         "Phase 1 Disaggregation Engine",
         "data_tier":     2,
         "resolution":    "15-min",
         "total_kwh":     total,

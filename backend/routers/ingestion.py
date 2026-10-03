@@ -89,6 +89,7 @@ async def upload_bill(file: UploadFile = File(...), plant_id: str = Form("1")):
             "file": file.filename,
             "size_kb": round(len(content) / 1024, 1),
             "ocr_engine": ocr_res["engine"],
+            "plant_name": extracted.get("consumer_name", active_plant.plant_name),
             "message": f"Bill parsed via {ocr_res['engine']}. Please review and confirm numbers before updating live dashboard.",
             "extracted": extracted,
             "requires_confirmation": True,
@@ -98,9 +99,11 @@ async def upload_bill(file: UploadFile = File(...), plant_id: str = Form("1")):
                 "power_factor": extracted.get("power_factor"),
                 "max_demand_kva": extracted.get("max_demand_kva"),
                 "discom": extracted.get("discom", "DISCOM"),
+                "consumer_name": extracted.get("consumer_name", active_plant.plant_name),
             },
             "data_tier": 1,
             "active_state": {
+                "plant": active_plant.plant_name,
                 "total_kwh": active_plant.total_kwh,
                 "total_bill_inr": active_plant.total_bill_inr,
                 "power_factor": active_plant.avg_pf,
@@ -143,6 +146,7 @@ async def confirm_bill(payload: dict):
         "power_factor": payload.get("power_factor"),
         "max_demand_kva": payload.get("max_demand_kva"),
         "discom": payload.get("discom", "DISCOM"),
+        "consumer_name": payload.get("consumer_name"),
     }
     extracted = {k: v for k, v in extracted.items() if v is not None}
     is_valid, reason = validate_bill_telemetry(extracted)
@@ -157,8 +161,9 @@ async def confirm_bill(payload: dict):
     active_plant.ingest_bill(extracted, payload.get("filename", "user_verified_bill"))
     return {
         "status": "confirmed",
-        "message": "✅ Bill metrics successfully confirmed! Live dashboard updated.",
+        "message": f"✅ Bill metrics confirmed for '{active_plant.plant_name}'! Live dashboard updated.",
         "active_state": {
+            "plant": active_plant.plant_name,
             "total_kwh": active_plant.total_kwh,
             "total_bill_inr": active_plant.total_bill_inr,
             "power_factor": active_plant.avg_pf,
@@ -167,14 +172,12 @@ async def confirm_bill(payload: dict):
     }
 
 
-
 @router.post("/upload-meter-data")
 async def upload_meter_data(file: UploadFile = File(...), plant_id: str = Form("1")):
     """
     Interval meter data upload.
     If valid CSV is uploaded, parses rows, calculates actual total_kwh and peak_kw,
     and updates the active analytics state.
-    If random file or non-CSV, gracefully falls back to demo values with clear labeling.
     """
     content = await file.read()
     result = active_plant.ingest_csv(content, file.filename)
@@ -206,27 +209,18 @@ async def upload_meter_data(file: UploadFile = File(...), plant_id: str = Form("
 
 @router.post("/upload-production")
 async def upload_production(file: UploadFile = File(...), plant_id: str = Form("1")):
+    """Parse production log and recalculate Specific Energy Consumption."""
     content = await file.read()
-    return {
-        "status": "demo_fallback",
-        "mode": "demo_values_used",
-        "file": file.filename,
-        "days_detected": 30,
-        "total_production_kg": 12_580,
-        "message": "Production log received (demo baseline applied for benchmark).",
-    }
+    result = active_plant.ingest_production(content, file.filename)
+    return result
 
 
 @router.post("/upload-equipment")
 async def upload_equipment(file: UploadFile = File(...), plant_id: str = Form("1")):
-    return {
-        "status": "demo_fallback",
-        "mode": "demo_values_used",
-        "file": file.filename,
-        "machines_detected": 5,
-        "total_installed_kw": 355,
-        "message": "Equipment register received (standard 5-machine profile active).",
-    }
+    """Parse equipment register (PDF, CSV, Excel, Text) and dynamically update machine inventory."""
+    content = await file.read()
+    result = active_plant.ingest_equipment(content, file.filename)
+    return result
 
 
 @router.post("/load-demo")

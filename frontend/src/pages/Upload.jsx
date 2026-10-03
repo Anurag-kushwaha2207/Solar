@@ -209,6 +209,7 @@ export default function Upload() {
               if (res?.requires_confirmation && res?.confirmation_fields) {
                 setConfirmationData({
                   ...res.confirmation_fields,
+                  consumer_name: res.confirmation_fields.consumer_name || res.plant_name || '',
                   filename: file.name,
                   engine: res.ocr_engine,
                 })
@@ -299,6 +300,16 @@ export default function Upload() {
                   className="confirm-input"
                   value={confirmationData.max_demand_kva ?? ''}
                   onChange={e => setConfirmationData(c => ({ ...c, max_demand_kva: parseFloat(e.target.value) || 0 }))}
+                />
+              </div>
+              <div className="confirm-item">
+                <label>Company / Plant Name</label>
+                <input
+                  type="text"
+                  className="confirm-input"
+                  placeholder="e.g. Shree Ram Industries"
+                  value={confirmationData.consumer_name || ''}
+                  onChange={e => setConfirmationData(c => ({ ...c, consumer_name: e.target.value }))}
                 />
               </div>
               <div className="confirm-item">

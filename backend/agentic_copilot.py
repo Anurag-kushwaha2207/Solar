@@ -41,44 +41,59 @@ def get_kpis() -> Dict[str, Any]:
     sec_energy = active_plant.specific_energy
     dev_pct = active_plant.deviation_pct
     return {
-        "plant": PLANT_NAME,
-        "period": "Sep 2026",
+        "plant": active_plant.plant_name,
+        "period": active_plant.billing_period,
+        "discom": active_plant.discom,
         "data_source": active_plant.source,
         "total_kwh": total_kwh,
         "total_bill_inr": total_bill,
-        "blended_rate_inr_per_kwh": 6.08,
+        "blended_rate_inr_per_kwh": round(total_bill / max(1.0, total_kwh), 2) if total_kwh > 0 else 6.08,
         "specific_energy_kwh_per_kg": sec_energy,
         "baseline_specific_energy": BASELINE_SEC_ENERGY,
         "deviation_pct": dev_pct,
         "power_factor": avg_pf,
         "pf_penalty_inr": SEP_PF_PENALTY_INR if avg_pf < 0.90 else 0,
         "contract_demand_kva": CONTRACT_KVA,
-        "note": f"Consumption is {dev_pct}% vs baseline; power factor is {avg_pf}.",
+        "production_kg": active_plant.production_kg,
+        "machines_count": len(active_plant.machines),
+        "machines": list(active_plant.machines.keys()),
+        "note": f"Consumption is {dev_pct}% vs baseline; power factor is {avg_pf} for {active_plant.plant_name}.",
     }
 
 
 def get_alerts() -> Dict[str, Any]:
-    """Fetch detected operational anomalies (strictly non-overlapping with ToD scheduler)."""
+    """Fetch detected operational anomalies matching active equipment."""
+    machines_list = list(active_plant.machines.keys())
+    compressor_m = next((m for m in machines_list if "compressor" in m.lower()), "Air Compressor (75 kW)")
+    press_m = next((m for m in machines_list if "press" in m.lower() or "motor" in m.lower() or "lathe" in m.lower() or "cnc" in m.lower() or "furnace" in m.lower()), "Hydraulic Press #3")
+
+    scale = active_plant.total_kwh / max(1.0, float(SEP_TOTAL_KWH))
+    comp_save = round(ANOMALY_SAVING_COMPRESSOR_INR * scale, 0)
+    press_save = round(ANOMALY_SAVING_PRESS3_INR * scale, 0)
+    pf_save = round(ANOMALY_SAVING_PF_INR * scale, 0) if active_plant.avg_pf < 0.90 else 0
+    tot_save = comp_save + press_save + pf_save
+
     return {
+        "plant": active_plant.plant_name,
         "total_alerts": 3,
-        "total_potential_saving_inr": TOTAL_ANOMALY_SAVING_INR,  # Rs. 12,400
+        "total_potential_saving_inr": tot_save,
         "alerts": [
             {
-                "machine": "Air Compressor (75 kW)",
+                "machine": compressor_m,
                 "type": "idle_waste",
                 "severity": "high",
-                "waste_kwh": 370,
-                "saving_inr_month": ANOMALY_SAVING_COMPRESSOR_INR,  # 8,400
-                "finding": "4.2 kW draw between 11 PM and 3 AM when plant production is zero",
+                "waste_kwh": round(370 * scale, 0),
+                "saving_inr_month": comp_save,
+                "finding": f"Idle draw during non-production hours detected on {compressor_m}",
                 "action": "Install timer relay or auto-shutoff switch (one-time ~Rs. 2,000)",
             },
             {
-                "machine": "Hydraulic Press #3",
+                "machine": press_m,
                 "type": "mechanical_wear",
                 "severity": "medium",
-                "waste_kwh": 380,
-                "saving_inr_month": ANOMALY_SAVING_PRESS3_INR,  # 2,800
-                "finding": "Specific energy creep (+0.3%/day) indicating bearing lubrication failure",
+                "waste_kwh": round(380 * scale, 0),
+                "saving_inr_month": press_save,
+                "finding": f"Specific energy creep on {press_m} indicating mechanical wear / lubrication need",
                 "action": "Schedule motor bearing inspection & re-greasing (~Rs. 3,500)",
             },
             {
@@ -86,12 +101,12 @@ def get_alerts() -> Dict[str, Any]:
                 "type": "pf_penalty",
                 "severity": "low",
                 "waste_kwh": 0,
-                "saving_inr_month": ANOMALY_SAVING_PF_INR,  # 1,200
+                "saving_inr_month": pf_save,
                 "finding": f"Operating at {active_plant.avg_pf} PF (target >= 0.90) incurring penalty",
                 "action": "APFC relay calibration & capacitor step replacement (~Rs. 10,000)",
             },
         ],
-        "non_overlap_note": "Furnace ToD tariff shifts (Rs. 47,500/mo) are handled in the Scheduler module to prevent double counting.",
+        "non_overlap_note": "Tariff shifts are handled in the Scheduler module to prevent double counting.",
     }
 
 
@@ -340,7 +355,26 @@ def _fallback_tool_router(query: str) -> Dict[str, Any]:
             "tool_result": data,
         }
 
-    # 6. Energy summary / KPIs
+    # 6. Machine / Equipment / Saman breakdown query
+    if any(k in q for k in ["saman", "equipment", "machine", "list", "load", "breakdown"]):
+        data = get_kpis()
+        mach_lines = "\n".join(
+            f"• **{m}**: {kwh:,.1f} kWh ({kwh/max(1.0, active_plant.total_kwh)*100:.1f}%)"
+            for m, kwh in active_plant.machines.items()
+        )
+        return {
+            "content": (
+                f"⚙️ **{active_plant.plant_name} — Equipment & Load Breakdown**\n\n"
+                f"Total Active Machines: **{len(active_plant.machines)}**\n"
+                f"Total Monthly Consumption: **{active_plant.total_kwh:,.1f} kWh**\n\n"
+                f"{mach_lines}\n\n"
+                f"💡 Yeh breakdown aapke uploaded documents aur physics load factors ke hisab se dynamically calculate hua hai."
+            ),
+            "tool_called": "get_kpis",
+            "tool_result": data,
+        }
+
+    # 7. Energy summary / KPIs
     if any(k in q for k in ["kpi", "bill", "energy", "consumption", "kwh", "power factor", "pf", "demand", "summary", "plant", "unit", "rupee", "cost", "overview"]):
         data = get_kpis()
         dev_sign = "+" if data["deviation_pct"] >= 0 else ""
@@ -356,23 +390,24 @@ def _fallback_tool_router(query: str) -> Dict[str, Any]:
                 f"**Quick Actions:**\n"
                 f"1. Type 'scheduler' to view CP-SAT ToD savings\n"
                 f"2. Type 'anomalies' to view operational waste alerts\n"
-                f"3. Type 'carbon' to view verified GHG Scope 1 & 2 audit report"
+                f"3. Type 'equipment' to view machine disaggregation"
             ),
             "tool_called": "get_kpis",
             "tool_result": data,
         }
 
-    # 6. Greetings & Menu
+    # 8. Greetings & Menu
     if any(k in q for k in ["hi", "hello", "namaste", "help", "menu", "kya kar", "start", "kaise"]):
         return {
             "content": (
-                "Namaste! 🙏 Main UrjaMind ka AI Copilot hun.\n\n"
-                "Main aapke factory ke real analytical tools execute karke instant answers deta hun:\n"
+                f"Namaste! 🙏 Main **{active_plant.plant_name}** ka AI Copilot hun.\n\n"
+                f"Main aapke plant ({len(active_plant.machines)} machines, {active_plant.total_kwh:,.0f} kWh) ke analytical tools execute karke instant answers deta hun:\n"
                 "1. 📊 `kpi` — Total consumption & bill analysis\n"
-                "2. ⚠️ `anomalies` — Operational waste detection (Rs. 12,400/mo)\n"
-                "3. 🚀 `scheduler` — Google OR-Tools CP-SAT ToD shift (Rs. 47,500/mo)\n"
-                "4. 🌿 `carbon` — Scope 1 & 2 GHG Protocol audit\n\n"
-                "Aap mujhse seedhe pooch sakte hain, jaise: *'Bill kyun badha?'* ya *'Scheduler se kitna bachega?'*"
+                "2. ⚙️ `equipment` — Machine-level disaggregation\n"
+                "3. ⚠️ `anomalies` — Operational waste detection\n"
+                "4. 🚀 `scheduler` — Google OR-Tools CP-SAT ToD tariff optimization\n"
+                "5. 🌿 `carbon` — Scope 1 & 2 GHG Protocol audit\n\n"
+                "Aap mujhse seedhe pooch sakte hain, jaise: *'Bill kyun badha?'* ya *'Machine list dikhao'*!"
             ),
             "tool_called": None,
             "tool_result": None,

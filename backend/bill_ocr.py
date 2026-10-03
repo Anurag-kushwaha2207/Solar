@@ -104,11 +104,41 @@ def parse_discom_bill_text(text: str) -> Dict[str, Any]:
 
     # 8. Consumer No & DISCOM Name
     discom_match = re.search(
-        r"(PGVCL|DGVCL|MGVCL|UGVCL|MSEDCL|BESCOM|TNEB|Tata Power|Torrent Power|Adani Electricity)",
+        r"(PGVCL|DGVCL|MGVCL|UGVCL|MSEDCL|BESCOM|TNEB|Tata Power|Torrent Power|Adani Electricity|BSES|CESC|JVVNL|AVVNL|DHBVN|UHBVN|UPPCL|WBSEDCL|APDCL|KSEB)",
         text, re.IGNORECASE
     )
     if discom_match:
         extracted["discom"] = discom_match.group(1).upper()
+
+    # 9. Company / Consumer Name
+    name_match = re.search(
+        r"(?:consumer\s*name|name\s*of\s*consumer|customer\s*name|company\s*name|m\/s\.?|billing\s*name)\s*[:=\-]?\s*([A-Za-z0-9\s\.\,\&\-\(\)\/]{3,60}?)(?:\n|\r|address|consumer|acc|tariff|bill|date|meter|pin|gstin)",
+        text, re.IGNORECASE
+    )
+    if name_match:
+        c_name = name_match.group(1).strip(" :,-\t\r\n")
+        if len(c_name) >= 3 and not any(skip in c_name.lower() for skip in ["address", "meter", "tariff", "subdivision"]):
+            extracted["consumer_name"] = c_name
+    else:
+        # Fallback: look for M/s or common industrial company name suffixes
+        comp_match = re.search(
+            r"([A-Za-z0-9\s\.\,\&\-]{3,50}\s+(?:pvt\.?\s*ltd\.?|ltd\.?|limited|industries|enterprise[s]?|foundry|engineering|textiles|polymers|steel[s]?|casting[s]?|works|mills|forge))\b",
+            text, re.IGNORECASE
+        )
+        if comp_match:
+            extracted["consumer_name"] = comp_match.group(1).strip()
+
+    # 10. Billing Month / Period
+    month_match = re.search(
+        r"(?:bill\s*(?:month|period|for\s*month)|billing\s*period)\s*[:=\-]?\s*([A-Za-z0-9\s\-\/\.]{3,30}?)(?:\n|\r|bill\s*date|due\s*date|reading)",
+        text, re.IGNORECASE
+    )
+    if month_match:
+        extracted["month"] = month_match.group(1).strip(" :,-\t\r\n")
+    else:
+        m_regex = re.search(r"\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[ -_]?(\d{4})\b", text, re.IGNORECASE)
+        if m_regex:
+            extracted["month"] = f"{m_regex.group(1)} {m_regex.group(2)}"
 
     return extracted
 
