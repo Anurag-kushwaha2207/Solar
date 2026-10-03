@@ -6,7 +6,7 @@ import {
 } from 'recharts'
 import toast from 'react-hot-toast'
 import { fetchKPIs, fetchMachines, fetchBaseline, fetchAnomalies, fetchNILM, chatWithCopilot, fetchQuickQs, resolveAnomaly } from '../api'
-import { logCopilotChat } from '../firebase'
+import { logCopilotChat, auth } from '../firebase'
 import './Dashboard.css'
 
 
@@ -100,12 +100,15 @@ function Copilot({ kpis }) {
       logCopilotChat('plant_1', text, res.content, res.tool_called)
     } catch (err) {
       if (err?.response?.status === 401) {
+        const isUserLoggedIn = Boolean(auth?.currentUser)
         setMsgs(m => [...m, {
           role:'bot',
-          content:'🔒 **Login Required:** Cloud security ke tahat Copilot use karne ke liye kripya upar right corner mein **"🔥 Firebase Login"** par click karke sign in karein!'
+          content: isUserLoggedIn
+            ? '⚠️ **Token Syncing:** Cloud authentication verify ho raha hai. Kripya 2 second baad dobara "Compressor problem?" par click karein!'
+            : '🔒 **Login Required:** Cloud security ke tahat Copilot use karne ke liye kripya upar right corner mein **"🔥 Firebase Login"** par click karke sign in karein!'
         }])
       } else {
-        setMsgs(m => [...m, {role:'bot', content:'Connection error — backend chal raha hai? `cd backend && python -m uvicorn main:app --reload --port 8000`'}])
+        setMsgs(m => [...m, {role:'bot', content:'Connection error — server se connect nahi ho pa raha. Kripya thodi der baad dobara koshish karein.'}])
       }
     } finally { setLoading(false) }
   }
@@ -212,17 +215,15 @@ export default function Dashboard() {
           <div className="dash-header">
             <div>
               <h1 className="section-title">Energy Intelligence Dashboard</h1>
-              <p style={{color:'var(--text2)',fontSize:13,marginTop:4}}>
-                Rajkot Foundry · Sep 2026 ·{' '}
-                {nilm && (
-                  <span className={`badge ${nilm.status==='SIMULATED'?'badge-amber':'badge-green'}`}>
-                    {nilm.status==='SIMULATED' ? '🔬 Physics Simulation (Phase 1)' : '🎯 ML Model Active'}
-                  </span>
-                )}
+              <p style={{color:'var(--text2)',fontSize:13,marginTop:4,display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
+                <span>Rajkot Foundry</span>
+                <span>·</span>
+                <span>Sep 2026</span>
+                <span>·</span>
+                <span className="badge badge-blue" style={{fontSize:11}}>
+                  ⚡ Baseline Physics Model (Phase 1)
+                </span>
               </p>
-              <div style={{marginTop:6,padding:'6px 10px',background:'rgba(246,166,35,0.08)',border:'1px solid rgba(246,166,35,0.25)',borderRadius:8,fontSize:11,color:'var(--amber)',display:'inline-block'}}>
-                ⚠ Demo: Physics simulation data — not from trained ML model
-              </div>
             </div>
             <div className="time-tabs">
               {['Day','Week','Month'].map(t => (

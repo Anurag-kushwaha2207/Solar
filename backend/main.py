@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from routers import ingestion, dashboard, nilm, anomaly, scheduler, carbon, copilot, auth, whatsapp
-from auth_middleware import get_current_user
+from auth_middleware import get_current_user, get_optional_current_user
 
 app = FastAPI(
     title="UrjaMind API",
