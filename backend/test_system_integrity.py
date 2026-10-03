@@ -95,7 +95,7 @@ def test_copilot_out_of_domain():
 
 def test_whatsapp_webhook():
     """9. WhatsApp Webhook: Received message, executed tool, returned response."""
-    r = client.post("/api/whatsapp/webhook", json={"From": "whatsapp:+919837101838", "Body": "opt"})
+    r = client.post("/api/whatsapp/webhook", json={"From": "whatsapp:+918000098765", "Body": "opt"})
     assert r.status_code == 200
     wa_res = r.json()
     assert "47,500" in wa_res["response"] or "47500" in wa_res["response"]
@@ -175,7 +175,7 @@ def test_twilio_meta_signature_isolation():
         os.environ["META_APP_SECRET"] = "test_meta_secret_active"
         r = client.post(
             "/api/whatsapp/webhook",
-            data={"Body": "opt", "From": "whatsapp:+919837101838"},
+            data={"Body": "opt", "From": "whatsapp:+918000098765"},
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
         assert r.status_code == 200

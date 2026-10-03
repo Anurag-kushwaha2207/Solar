@@ -205,7 +205,7 @@ async def upload_meter_data(file: UploadFile = File(...), plant_id: str = Form("
 
 
 @router.post("/upload-production")
-async def upload_production(file: UploadFile = File(...), plant_id: int = Form(1)):
+async def upload_production(file: UploadFile = File(...), plant_id: str = Form("1")):
     content = await file.read()
     return {
         "status": "demo_fallback",
@@ -218,7 +218,7 @@ async def upload_production(file: UploadFile = File(...), plant_id: int = Form(1
 
 
 @router.post("/upload-equipment")
-async def upload_equipment(file: UploadFile = File(...), plant_id: int = Form(1)):
+async def upload_equipment(file: UploadFile = File(...), plant_id: str = Form("1")):
     return {
         "status": "demo_fallback",
         "mode": "demo_values_used",
@@ -230,7 +230,7 @@ async def upload_equipment(file: UploadFile = File(...), plant_id: int = Form(1)
 
 
 @router.post("/load-demo")
-async def load_demo(plant_id: int = 1):
+async def load_demo(plant_id: str = "1"):
     active_plant.reset_to_demo()
     return {
         "status": "success",

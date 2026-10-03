@@ -226,8 +226,8 @@ export default function Upload() {
             }}
           />
           <DropZone id="f-prod" icon="🏭" title="Production Log" required={false}
-            desc="Daily output, shift schedule, product type — Excel / Tally / ERP export"
-            formats={['Excel','CSV','Tally XML']}
+            desc="Daily output, shift schedule, product type — Excel / CSV / PDF / ERP export"
+            formats={['Excel','CSV','PDF','Tally XML']}
             uploaded={uploaded.prod}
             onUpload={async fd => {
               const res = await uploadProduction(fd)
@@ -237,7 +237,7 @@ export default function Upload() {
           />
           <DropZone id="f-equip" icon="⚙️" title="Equipment Register" required={false}
             desc="Machine list with kW rating, quantity, motor type — one-time setup"
-            formats={['Excel','CSV','Form']}
+            formats={['Excel','CSV','PDF','Form']}
             uploaded={uploaded.equip}
             onUpload={async fd => {
               const res = await uploadEquipment(fd)
@@ -357,9 +357,9 @@ export default function Upload() {
           <div className="wa-content">
             <div className="wa-title">WhatsApp Copilot & Webhook Integration</div>
             <div className="wa-desc">Direct query or meter alerts via Meta WhatsApp Cloud API / Twilio Sandbox: <code>POST /api/whatsapp/webhook</code></div>
-            <div className="wa-number">+91 9837101838</div>
+            <div className="wa-number">+91 80000 98765 (UrjaMind Bot)</div>
           </div>
-          <button className="wa-btn" onClick={() => { navigator.clipboard?.writeText('+91 9837101838'); toast.success('Helpline +91 9837101838 copied! Webhook active at /api/whatsapp/webhook') }}>
+          <button className="wa-btn" onClick={() => { navigator.clipboard?.writeText('+91 80000 98765'); toast.success('Helpline +91 80000 98765 copied! Webhook active at /api/whatsapp/webhook') }}>
             📋 Copy Number
           </button>
         </div>

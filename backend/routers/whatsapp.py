@@ -80,7 +80,7 @@ def verify_twilio_signature(url: str, params: Dict[str, str], signature_header: 
 
 class DirectWhatsAppMessage(BaseModel):
     message: str
-    from_number: Optional[str] = "+919837101838"
+    from_number: Optional[str] = "+918000098765"
 
 
 @router.get("/webhook")
