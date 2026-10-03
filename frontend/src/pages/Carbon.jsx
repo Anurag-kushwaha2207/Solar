@@ -129,8 +129,13 @@ export default function Carbon() {
           <div className="carbon-kpi-card" style={{'--accent':'var(--blue-light)'}}>
             <div className="ckpi-icon">📊</div>
             <div className="ckpi-val">{combined.intensity_kg_per_kg}</div>
-            <div className="ckpi-label">kgCO₂e / kg casting</div>
-            <div className="ckpi-sub">Target: 2.45 kg · Gap: {(combined.intensity_kg_per_kg-2.45).toFixed(2)}</div>
+            <div className="ckpi-label">{combined.intensity_unit || (report.data_source === 'demo_baseline' ? 'kgCO₂e / kg casting' : 'kgCO₂e / unit produced')}</div>
+            <div className="ckpi-sub">
+              {report.data_source === 'demo_baseline'
+                ? `Target: 2.45 kg · Gap: ${(combined.intensity_kg_per_kg-2.45).toFixed(2)}`
+                : `Target: Calibrated baseline (${combined.intensity_kg_per_kg})`
+              }
+            </div>
           </div>
         </div>
 
@@ -167,18 +172,27 @@ export default function Carbon() {
             {/* Intensity Trend */}
             <div className="chart-card" style={{marginBottom:20}}>
               <div className="chart-title">Emission Intensity Trend</div>
-              <div className="chart-sub">kgCO₂e per kg casting · Target = 2.45</div>
+              <div className="chart-sub">
+                {intensity?.unit || (report.data_source === 'demo_baseline' ? 'kgCO₂e per kg casting · Target = 2.45' : 'kgCO₂e per unit output · Calibrated baseline')}
+              </div>
               <ResponsiveContainer width="100%" height={160}>
                 <LineChart data={intensityData}>
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
                   <XAxis dataKey="month" tick={{fill:'#4a6580',fontSize:11}} />
-                  <YAxis tick={{fill:'#4a6580',fontSize:10}} domain={[2.3,2.9]} />
+                  <YAxis tick={{fill:'#4a6580',fontSize:10}} domain={report.data_source === 'demo_baseline' ? [2.3, 2.9] : ['auto', 'auto']} />
                   <Tooltip contentStyle={{background:'#0d1a2e',border:'1px solid rgba(99,179,237,0.25)',borderRadius:10,fontSize:12}} />
-                  <ReferenceLine y={2.45} stroke="var(--green)" strokeDasharray="6 3" label={{value:'Target 2.45',fill:'var(--green)',fontSize:10}} />
+                  {report.data_source === 'demo_baseline' && (
+                    <ReferenceLine y={2.45} stroke="var(--green)" strokeDasharray="6 3" label={{value:'Target 2.45',fill:'var(--green)',fontSize:10}} />
+                  )}
                   <Legend wrapperStyle={{fontSize:11,color:'#8ba7c7'}} />
                   <Line type="monotone" dataKey="Intensity" stroke="var(--amber)" strokeWidth={2} dot={{r:4}} />
                 </LineChart>
               </ResponsiveContainer>
+              {intensity?.note && (
+                <div style={{fontSize:11,color:'var(--text3)',marginTop:8}}>
+                  ℹ️ {intensity.note}
+                </div>
+              )}
             </div>
 
             {/* M&V Table */}

@@ -93,6 +93,20 @@ async def get_machine_breakdown(plant_id: int = 1):
 
 @router.get("/baseline-trend")
 async def get_baseline_trend():
+    from active_data import active_plant
+    if active_plant.source != "demo_baseline":
+        target_sec = active_plant.specific_energy
+        return {
+            "months": ["Uploaded Month"],
+            "baseline_kwh_per_kg": [target_sec],
+            "actual_kwh_per_kg": [target_sec],
+            "unit": "kWh/unit",
+            "model": "Single-Month Upload Calibration",
+            "divergence_start": "N/A",
+            "root_cause": "Calibrated against active production log",
+            "note": f"Baseline calibrated from uploaded production log ({target_sec} kWh/unit for {active_plant.plant_name}). Multi-month trend requires additional billing cycles.",
+        }
+
     monthly_kg = [9_400, 9_800, 10_600, 11_200, 11_800, SEP_PRODUCTION_KG]
     baseline   = [BASELINE_SEC_ENERGY] * 6
     actual     = [round(kwh / kg, 3) for kwh, kg in zip(MONTHLY_KWH, monthly_kg)]
@@ -100,6 +114,7 @@ async def get_baseline_trend():
         "months":               MONTHS_6,
         "baseline_kwh_per_kg":  baseline,
         "actual_kwh_per_kg":    actual,
+        "unit":                 "kWh/kg casting",
         "model":                "LightGBM regression — PLANNED Phase 2 (not yet trained)",
         "features_planned":     ["production_kg", "shift_hours", "max_temp_c"],
         "divergence_start":     "Jun 2026",
@@ -110,10 +125,39 @@ async def get_baseline_trend():
 
 @router.get("/load-profile")
 async def get_load_profile(days: int = Query(1, ge=1, le=7)):
-    """Synthetic 24-hour load profile — physics simulation."""
+    """24-hour load profile — dynamic machine disaggregation."""
+    from active_data import active_plant
     import math, random
     random.seed(42)
     slots = []
+
+    if active_plant.source != "demo_baseline" and active_plant.machines:
+        # Dynamic slots based on active machines
+        machines = active_plant.machines
+        total_m_kwh = sum(machines.values())
+        for h in range(24):
+            is_working = 8 <= h < 20
+            slot_data = {"hour": f"{h:02d}:00"}
+            tot_kw = 0.0
+            for m_name, m_kwh in machines.items():
+                short_name = m_name.replace("Production Machine ", "").replace("Plant ", "").split(" (")[0]
+                # Distribute daily average kW with shift variation
+                avg_kw = (m_kwh / 26) / (12 if is_working else 24)
+                if is_working:
+                    kw = max(0.5, round(avg_kw * (0.85 + 0.3 * math.sin(h * 0.5 + hash(m_name) % 5)), 1))
+                else:
+                    kw = max(0.2, round(avg_kw * 0.1, 1))
+                slot_data[short_name] = kw
+                tot_kw += kw
+            slot_data["total_kw"] = round(tot_kw, 1)
+            slot_data["tariff"] = get_tariff_rate(h)
+            slots.append(slot_data)
+        return {
+            "slots": slots,
+            "note": f"Machine disaggregation profile for {active_plant.plant_name}",
+            "period": active_plant.billing_period,
+        }
+
     for h in range(24):
         is_working = 6 <= h < 22
         furnace  = 120 + 30 * math.sin(h * 0.4) if is_working else 6

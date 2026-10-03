@@ -42,13 +42,25 @@ async def chat(msg: ChatMessage):
 
 @router.get("/quick-questions")
 async def quick_questions():
+    from active_data import active_plant
+    if active_plant.source == "demo_baseline":
+        return [
+            "Bill kyun badha? 📈",
+            "Compressor raat ko kyon chal raha hai?",
+            f"Power factor {SEP_AVG_PF} — kya penalty hai?",
+            "Schedule optimize karo — ToD shift saving kitna hai?",
+            "What operational anomalies were detected?",
+            "Carbon report — Scope 1 aur 2 kitna hai?",
+        ]
+
+    pf_txt = f"Power factor {active_plant.avg_pf} (Healthy — No penalty)" if active_plant.avg_pf >= 0.90 else f"Power factor {active_plant.avg_pf} penalty?"
     return [
         "Bill kyun badha? 📈",
-        "Compressor raat ko kyon chal raha hai?",
-        f"Power factor {SEP_AVG_PF} — kya penalty hai?",
-        "Schedule optimize karo — ToD shift saving kitna hai?",
-        "What operational anomalies were detected?",
-        "Carbon report — Scope 1 aur 2 kitna hai?",
+        "Power factor kya hai? 📊",
+        "CNC machines ka load kya hai? ⚙️",
+        "Schedule optimize karo — ToD shift saving kitna hai? 🚀",
+        "Operational anomalies kya hain? ⚠️",
+        "Carbon report — Scope 2 kitna hai? 🌿",
     ]
 
 

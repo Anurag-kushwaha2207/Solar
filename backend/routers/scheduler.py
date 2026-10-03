@@ -25,7 +25,8 @@ def _current_jobs():
 async def get_jobs(plant_id: int = 1):
     """Return current schedule (no optimization) with summary."""
     jobs = _current_jobs()
-    result = solve_cpsat(jobs, max_demand_kva=250.0, time_limit_s=5.0)
+    default_md = float(getattr(active_plant, "contract_kva", 250.0) or 250.0)
+    result = solve_cpsat(jobs, max_demand_kva=default_md, time_limit_s=5.0)
     return {
         "ortools_available": ORTOOLS_AVAILABLE,
         "jobs": result.jobs,
@@ -44,10 +45,14 @@ async def get_jobs(plant_id: int = 1):
 async def optimize(req: ScheduleRequest):
     """Run real CP-SAT or Greedy optimisation and return result."""
     jobs = _current_jobs()
+    md = req.max_demand_kva
+    if active_plant.source != "demo_baseline" and req.max_demand_kva == 250.0:
+        md = float(getattr(active_plant, "contract_kva", 285.0) or 285.0)
+
     if req.optimize_method.lower() == "greedy":
-        result = _fallback_greedy(jobs, max_demand_kva=req.max_demand_kva)
+        result = _fallback_greedy(jobs, max_demand_kva=md)
     else:
-        result = solve_cpsat(jobs, max_demand_kva=req.max_demand_kva, time_limit_s=5.0)
+        result = solve_cpsat(jobs, max_demand_kva=md, time_limit_s=5.0)
 
     return {
         "method":            result.method,
@@ -74,8 +79,12 @@ async def optimize(req: ScheduleRequest):
 async def compare_methods(max_demand_kva: float = 250.0):
     """Compare real CP-SAT vs real Greedy heuristic."""
     jobs = _current_jobs()
-    cpsat_res = solve_cpsat(jobs, max_demand_kva=max_demand_kva, time_limit_s=5.0)
-    greedy_res = _fallback_greedy(jobs, max_demand_kva=max_demand_kva)
+    md = max_demand_kva
+    if active_plant.source != "demo_baseline" and max_demand_kva == 250.0:
+        md = float(getattr(active_plant, "contract_kva", 285.0) or 285.0)
+
+    cpsat_res = solve_cpsat(jobs, max_demand_kva=md, time_limit_s=5.0)
+    greedy_res = _fallback_greedy(jobs, max_demand_kva=md)
     return {
         "methods": [
             {

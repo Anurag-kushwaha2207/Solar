@@ -41,6 +41,8 @@ class ActivePlantData:
         self.specific_energy = float(SEP_SEC_ENERGY)
         self.deviation_pct = float(SEP_DEVIATION_PCT)
         self.peak_kw = float(round(187.4 * SEP_AVG_PF, 1))
+        self.contract_kva = float(CONTRACT_KVA)
+        self.max_demand_kva = 187.4
         self.equipment_list: List[Dict[str, Any]] = []
         self.machines = dict(MACHINE_KWH)
         self.raw_df: Optional[pd.DataFrame] = None
@@ -298,6 +300,8 @@ class ActivePlantData:
         self.total_kwh = round(float(total_kwh), 1)
         self.total_bill_inr = round(float(total_amount), 0)
         self.avg_pf = round(float(avg_pf), 3)
+        self.max_demand_kva = round(float(max_demand_kva), 1)
+        self.contract_kva = round(float(extracted.get("contract_demand_kva", max_demand_kva)), 1)
         self.peak_kw = round(float(max_demand_kva * self.avg_pf), 1)
         self.specific_energy = round(self.total_kwh / max(1.0, self.production_kg), 3)
         self.deviation_pct = round((self.specific_energy - BASELINE_SEC_ENERGY) / BASELINE_SEC_ENERGY * 100, 1)
