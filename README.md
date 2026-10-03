@@ -19,27 +19,27 @@ UrjaMind helps Indian SMEs reduce industrial electricity bills and ToD peak surc
 
 | Component | Status in Repo | Implementation Reality & Transparency |
 |---|---|---|
-| **Tariff Scheduler** | ✅ **REAL** | Google OR-Tools 9.x CP-SAT solver. Finds global optimal schedule in <0.3s respecting 250 kVA Max Demand. Monthly saving: **₹47,500/month (16.5%)**. |
-| **Comparative Heuristic** | ✅ **REAL** | Live Greedy benchmark solver running independently alongside CP-SAT. |
-| **Carbon Accounting** | ✅ **REAL** | Verified CEA Western Grid emission factor (0.716 kgCO₂e/kWh), Scope 1 diesel logs, and cryptographically verified SHA-256 payload digest. |
-| **Data Ingestion & OCR** | ✅ **REAL** | Digital PDF parser (PyMuPDF) + Scanned Bill Photo OCR (Claude Vision) with strict physical sanity bounds (`kWh > 0`, `0.5 ≤ PF ≤ 1.0`, `amount > 0`) and user confirmation UI. |
-| **Security & Auth** | ✅ **REAL** | Firebase Auth token verification, production token locking (401 for demo tokens in `ENVIRONMENT=production`), Twilio/Meta HMAC-SHA256 signature verification, dynamic CORS. |
-| **Machine NILM** | 🔬 Phase 1 | Physics-informed equipment register breakdown (sums strictly to 48,240 kWh). Neural Seq2Point/Transformer training on real IMDELD/HIPE datasets is Phase 2 (post-Oct 11). |
-| **Anomaly Detection** | 🔬 Phase 1 | Physics rules (e.g. 4.2 kW compressor idle draw, low PF 0.870) totaling ₹12,400/month without double-counting. Deep LSTM-VAE is Phase 2. |
-| **Copilot** | 🔬 Phase 1 | Multi-tool agentic engine (grounded in tool outputs, strictly executing verified analytical solvers). |
+| **Tariff Scheduler** | ✅ **Working Prototype** | Google OR-Tools 9.x CP-SAT solver. Finds global optimal schedule in <0.3s respecting 250 kVA Max Demand. Estimated saving: **₹47,500/month (16.2% of base energy bill)**. |
+| **Comparative Heuristic** | ✅ **Working Prototype** | Live Greedy benchmark solver running independently alongside CP-SAT. |
+| **Carbon Accounting** | ✅ **Working Prototype** | Standard CEA v18/v19 emission factor (0.716 kgCO₂e/kWh), Scope 1 diesel logs, and SHA-256 tamper-evident payload digest (third-party audit required for regulatory filings). |
+| **Data Ingestion & OCR** | ✅ **Working Prototype** | Digital PDF parser (PyMuPDF) + Scanned Bill Photo OCR (Claude Vision) with physical sanity bounds (`kWh > 0`, `0.5 ≤ PF ≤ 1.0`, `amount > 0`) and user confirmation UI before ingesting. |
+| **Security & Auth** | ✅ **Working Prototype** | Firebase Auth token verification, production token locking (401 for demo tokens in `ENVIRONMENT=production`), Twilio/Meta HMAC-SHA256 signature verification, dynamic CORS. |
+| **Machine NILM** | 🔬 Phase 1 | Physics-informed equipment register breakdown (sums strictly to 48,240 kWh baseline). Neural Seq2Point/Transformer training on real IMDELD/HIPE datasets is Phase 2 (post-Oct 11). |
+| **Anomaly Detection** | 🔬 Phase 1 | Physics rules (e.g. 4.2 kW compressor idle draw, low PF 0.870) totaling estimated ₹12,400/month (illustrative; to be validated in factory pilot). Deep LSTM-VAE is Phase 2. |
+| **Copilot** | 🔬 Phase 1 | Multi-tool agentic engine (answers are grounded in tool outputs, strictly executing analytical solvers). |
 | **Digital Twin & Forecasting** | 🔬 Phase 2 | LightGBM baseline forecasting and digital twin models will be trained during the hackathon prototype phase (from Oct 11 onwards). |
 
 ---
 
-## 📅 Scheduler Results (Verified with Google OR-Tools CP-SAT)
+## 📅 Scheduler Results (Estimated with Google OR-Tools CP-SAT Solver)
 
 ```text
 Contract Max Demand:       250 kVA (Gujarat PGVCL ToD tariff)
 Baseline Daily Cost:       ₹11,499.05 / day
 Optimal Daily Cost:        ₹9,599.05 / day
-Daily Cost Reduction:      ₹1,900.00 / day (16.5% reduction)
+Daily Cost Reduction:      ₹1,900.00 / day (16.5% daily production energy cost reduction)
 Working Days per Month:    25 days
-Monthly Saving:            ₹47,500.00 / month
+Estimated Monthly Saving:  ₹47,500.00 / month (16.2% of ₹2,93,300 base energy bill)
 
 Key Job Shifts:
   • Furnace Melt #1 (160 kW, 11 slots): 06:00 (normal ₹6.20) → 00:00 (off-peak ₹4.50)  — saves ₹748/day
@@ -60,12 +60,12 @@ Key Job Shifts:
 
 ---
 
-## 🌿 Carbon Accounting & Audit Trail
+## 🌿 Carbon Accounting & Tamper-Evident Digest
 
-- **Scope 2:** `48,240 kWh × 0.716 kgCO₂e/kWh ÷ 1000 = 34.54 tCO₂e` (CEA v18 Western Regional Grid)
+- **Scope 2:** `48,240 kWh × 0.716 kgCO₂e/kWh ÷ 1000 = 34.54 tCO₂e` (CEA CO₂ Baseline Database v18/v19 User Guide Table 1)
 - **Scope 1:** Diesel generator logs = 3.20 tCO₂e
 - **Total Sep 2026 Emissions:** 37.74 tCO₂e
-- **Cryptographic Audit Digest:** SHA-256 hash computed directly on official reporting payload (`3ce423485e084eb1...4fd437d0`) for buyer disclosure and CBAM readiness.
+- **Tamper-Evident Report Digest:** SHA-256 hash computed directly on official reporting payload (`3ce423485e084eb1...4fd437d0`) for audit integrity and disclosure preparedness (Phase 1 prototype; formal regulatory submissions require accredited third-party verification).
 
 ---
 

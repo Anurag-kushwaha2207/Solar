@@ -119,23 +119,24 @@ It then recommends:
 ## 8. Impact and validation
 
 The platform quantifies impact through a measurement-and-verification logic:
-
 - baseline energy vs actual energy,
 - production-adjusted savings,
 - maximum demand reduction,
 - rupee savings,
 - carbon reduction.
 
-The system reports evidence and confidence rather than unverified savings claims.
+The system reports model estimates and confidence levels rather than unverified savings claims.
 
-### Verified Prototype Savings Breakdown (Rajkot Foundry Case Study):
+### Estimated Prototype Savings Breakdown (Illustrative Case Study — Rajkot Foundry):
 | Intervention Category | Specific Action | Monthly Impact | Method / Engine |
 | :--- | :--- | :--- | :--- |
-| **Tariff Scheduling** | Shift Furnace Melt #1 & #2 to off-peak / normal slots | **₹47,500 / mo** | Google OR-Tools CP-SAT (respects 250 kVA MD) |
-| **Operational Waste** | Compressor night idle-draw shutoff (370 kWh saved) | **₹8,400 / mo** | Physics residual & statistical baselining |
+| **Tariff Scheduling** | Shift Furnace Melt #1 & #2 to off-peak / normal slots | **₹47,500 / mo** | Google OR-Tools CP-SAT (respects 250 kVA MD; 16.2% of base energy bill) |
+| **Operational Waste** | Compressor night idle-draw shutoff (370 kWh unneeded run) | **₹8,400 / mo** | Physics residual & statistical baselining (illustrative) |
 | **Asset Degradation** | Hydraulic Press #3 motor bearing maintenance | **₹2,800 / mo** | Specific energy creep tracking (+0.3%/day) |
 | **Tariff Compliance** | APFC capacitor bank re-tuning (PF 0.87 → 0.95) | **₹1,200 / mo** | Measured DISCOM power factor penalty avoidance |
-| **Total Non-Overlapping** | Combined verified interventions | **₹59,900 / mo** | *Strictly zero double-counting (~20.2% bill reduction)* |
+| **Total Combined Potential** | Combined illustrative interventions | **₹59,900 / mo** | *Model estimate (~20.2% total potential bill reduction; subject to factory pilot validation)* |
+
+*Note: Scheduler shifts adjust production timing, whereas anomaly detection identifies unneeded idle leaks and mechanical wear. While addressing distinct mechanisms, combined totals are model projections to be validated on real factory sub-meters during Phase 2 pilot deployments.*
 
 ## 9. Business model
 
