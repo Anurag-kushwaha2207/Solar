@@ -23,12 +23,12 @@ app = FastAPI(
     redoc_url="/api/redoc",
 )
 
-# CORS — strict origins when credentials are enabled
+# CORS — dynamically read ALLOWED_ORIGINS from environment variable with local fallbacks
+_default_origins = "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000"
 ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://127.0.0.1:5173",
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
+    o.strip()
+    for o in os.environ.get("ALLOWED_ORIGINS", _default_origins).split(",")
+    if o.strip()
 ]
 
 app.add_middleware(

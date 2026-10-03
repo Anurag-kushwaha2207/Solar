@@ -102,11 +102,17 @@ def test_whatsapp_webhook():
 
 
 def test_meter_upload_fallback():
-    """10. Upload Fallback: Invalid file explicitly returns demo_values_used."""
+    """10. Upload Fallback & Photo OCR: Fallback on invalid data and Claude Vision detection on JPG/PNG bills."""
     r = client.post("/api/ingest/upload-meter-data", files={"file": ("test.txt", b"random content", "text/plain")})
     assert r.status_code == 200
     res = r.json()
     assert res["mode"] == "demo_values_used"
+
+    # Photo bill upload pipeline test (verifies JPG/PNG triggers Claude Vision OCR)
+    r_img = client.post("/api/ingest/upload-bill", files={"file": ("factory_bill_pgvcl.jpg", b"fake_jpg_binary", "image/jpeg")})
+    assert r_img.status_code == 200
+    img_res = r_img.json()
+    assert "Claude Vision" in img_res["ocr_engine"]
 
 
 def test_carbon_report():
@@ -234,6 +240,21 @@ def test_unauthenticated_api_rejection_on_logout():
     # Insecure /auth/login endpoint has been completely removed
     login_r = unauthenticated_client.post("/api/auth/login", json={"email": "a", "password": "b"})
     assert login_r.status_code in (404, 405), f"Expected /auth/login to be removed (404/405), got {login_r.status_code}"
+
+    # Production security check: Demo tokens and test tokens are strictly rejected (401) in production
+    import os
+    orig_env = os.environ.get("ENVIRONMENT", "development")
+    try:
+        os.environ["ENVIRONMENT"] = "production"
+        prod_demo_client = TestClient(app, headers={"Authorization": "Bearer demo-token-urjamind-2026"})
+        prod_r = prod_demo_client.post("/api/copilot/chat", json={"message": "kpi"})
+        assert prod_r.status_code == 401, f"Expected 401 in production for demo token, got {prod_r.status_code}"
+
+        prod_attacker_client = TestClient(app, headers={"Authorization": "Bearer test-token-attacker"})
+        prod_att_r = prod_attacker_client.post("/api/copilot/chat", json={"message": "kpi"})
+        assert prod_att_r.status_code == 401, f"Expected 401 in production for test token, got {prod_att_r.status_code}"
+    finally:
+        os.environ["ENVIRONMENT"] = orig_env
 
 
 def test_firebase_auth_user_isolation():

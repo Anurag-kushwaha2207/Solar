@@ -76,24 +76,25 @@ async def get_current_user(
     if not token:
         raise HTTPException(status_code=401, detail="Empty bearer token provided")
 
-    # 1. Development / Test Token Fallback (for local offline dev & test suites)
-    if token == "demo-token-urjamind-2026":
-        return {
-            "uid": "plant_demo",
-            "email": "manager@rajkotfoundry.in",
-            "name": "Rajkot Plant Manager",
-            "source": "demo_token",
-        }
+    # 1. Development / Test Token Fallback (strictly disabled in production)
+    if env != "production":
+        if token == "demo-token-urjamind-2026":
+            return {
+                "uid": "plant_demo",
+                "email": "manager@rajkotfoundry.in",
+                "name": "Rajkot Plant Manager",
+                "source": "demo_token",
+            }
 
-    if token.startswith("test-token-"):
-        # e.g. "test-token-userA" -> uid="userA"
-        tenant_uid = token.replace("test-token-", "")
-        return {
-            "uid": tenant_uid,
-            "email": f"{tenant_uid}@factory.com",
-            "name": f"Supervisor {tenant_uid}",
-            "source": "test_token",
-        }
+        if token.startswith("test-token-"):
+            # e.g. "test-token-userA" -> uid="userA"
+            tenant_uid = token.replace("test-token-", "")
+            return {
+                "uid": tenant_uid,
+                "email": f"{tenant_uid}@factory.com",
+                "name": f"Supervisor {tenant_uid}",
+                "source": "test_token",
+            }
 
     # 2. Live Firebase Admin Verification (if service account configured)
     if _firebase_initialized:
@@ -109,11 +110,11 @@ async def get_current_user(
             logger.warning("Firebase token verification failure: %s", e)
             raise HTTPException(status_code=401, detail=f"Invalid or expired Firebase ID token: {e}")
 
-    # In production without firebase initialized, reject arbitrary tokens
+    # In production without verified token, reject with 401
     if env == "production":
         raise HTTPException(
             status_code=401,
-            detail="Production Firebase Authentication is unconfigured or token is unrecognized.",
+            detail="Valid Firebase ID token required in production. Demo and test tokens are disabled.",
         )
 
     # In development, interpret token as user UID for seamless local prototyping

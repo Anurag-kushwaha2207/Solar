@@ -13,14 +13,21 @@ Extracts structured billing & technical telemetry from uploaded DISCOM bills:
 
 Supports:
 1. Native Digital PDF bills (PGVCL, DGVCL, MSEDCL, BESCOM, TNEB, Tata Power) via PyMuPDF / PyPDF2
-2. Text / CSV transcripts
+1. Scanned paper bills & photos (JPG, PNG, WEBP) via Claude Vision AI OCR
+3. Text / CSV transcripts
 """
 from __future__ import annotations
 
+import base64
+import json
+import logging
+import os
 import re
 import io
 from typing import Any, Dict, Optional
 import fitz  # PyMuPDF
+
+logger = logging.getLogger("urjamind.bill_ocr")
 
 
 def parse_discom_bill_text(text: str) -> Dict[str, Any]:
@@ -116,21 +123,143 @@ def extract_text_from_pdf(content_bytes: bytes) -> str:
     return "\n".join(text_chunks)
 
 
+def extract_bill_from_image_claude(
+    image_bytes: bytes,
+    media_type: str = "image/jpeg",
+) -> Dict[str, Any]:
+    """
+    Extract structured telemetry from bill photos using Claude Vision API.
+    Extracts total_kwh, total_kvah, max_demand_kva, power_factor, total_amount_inr, discom, and billing month.
+    """
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key or api_key == "your_anthropic_api_key_here":
+        logger.info("Claude API key not set, using demo fallback for photo OCR")
+        return {}
+
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=api_key)
+        b64_img = base64.b64encode(image_bytes).decode("utf-8")
+        model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5-5")
+
+        prompt = (
+            "You are an expert OCR parser for Indian DISCOM industrial/commercial electricity bills (e.g. PGVCL, DGVCL, MSEDCL, BESCOM, TNEB, Tata Power).\n"
+            "Examine this bill image carefully and extract all billing metrics.\n"
+            "Return ONLY a valid JSON object with the following fields (use null if not visible):\n"
+            "{\n"
+            '  "total_kwh": <float or null>,\n'
+            '  "total_kvah": <float or null>,\n'
+            '  "max_demand_kva": <float or null>,\n'
+            '  "contract_demand_kva": <float or null>,\n'
+            '  "power_factor": <float or null>,\n'
+            '  "total_amount_inr": <float or null>,\n'
+            '  "tod_peak_kwh": <float or null>,\n'
+            '  "tod_offpeak_kwh": <float or null>,\n'
+            '  "discom": <string or null>,\n'
+            '  "month": <string or null>\n'
+            "}\n"
+            "Strict JSON only without markdown code blocks."
+        )
+
+        resp = client.messages.create(
+            model=model,
+            max_tokens=1024,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": media_type,
+                                "data": b64_img,
+                            },
+                        },
+                        {"type": "text", "text": prompt},
+                    ],
+                }
+            ],
+        )
+
+        content_text = resp.content[0].text.strip()
+        clean_json = re.sub(r"^```(?:json)?\s*", "", content_text, flags=re.MULTILINE)
+        clean_json = re.sub(r"\s*```$", "", clean_json, flags=re.MULTILINE).strip()
+        parsed = json.loads(clean_json)
+
+        result: Dict[str, Any] = {}
+        for k, v in parsed.items():
+            if v is not None:
+                if k in ("total_kwh", "total_kvah", "max_demand_kva", "contract_demand_kva", "power_factor", "total_amount_inr", "tod_peak_kwh", "tod_offpeak_kwh"):
+                    try:
+                        result[k] = float(v)
+                    except (ValueError, TypeError):
+                        pass
+                else:
+                    result[k] = str(v)
+        return result
+    except Exception as e:
+        logger.warning("Claude Vision OCR error: %s", e)
+        return {}
+
+
 def process_uploaded_bill(content_bytes: bytes, filename: str) -> Dict[str, Any]:
     """
     Main entry point for processing an uploaded electricity bill.
-    Supports PDF extraction via PyMuPDF and text/CSV parsing.
+    Supports:
+    1. Digital PDFs (PGVCL/DGVCL/MSEDCL text extraction via PyMuPDF)
+    2. Photos and scanned images (JPG/PNG/WEBP via Claude Vision AI OCR)
+    3. Scanned PDFs (renders page to image and runs Claude Vision AI OCR)
+    4. Text/CSV bill logs
     """
     raw_text = ""
     engine_used = "Text Parser"
+    extracted: Dict[str, Any] = {}
+    lower_fn = filename.lower()
+
+    image_ext_map = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+        ".bmp": "image/bmp",
+    }
+    is_image = any(lower_fn.endswith(ext) for ext in image_ext_map)
 
     try:
-        if filename.lower().endswith(".pdf"):
+        # A. Direct Bill Photo (JPG, PNG, WEBP)
+        if is_image:
+            ext = next(e for e in image_ext_map if lower_fn.endswith(e))
+            media_type = image_ext_map[ext]
+            engine_used = "Claude Vision AI OCR"
+            extracted = extract_bill_from_image_claude(content_bytes, media_type)
+
+        # B. PDF Document
+        elif lower_fn.endswith(".pdf"):
             raw_text = extract_text_from_pdf(content_bytes)
             engine_used = "PyMuPDF Digital Text Engine"
+            extracted = parse_discom_bill_text(raw_text)
+
+            # Fallback for Scanned PDF without native text: Render first page and run Claude Vision OCR
+            if not extracted and len(content_bytes) > 0:
+                try:
+                    with fitz.open(stream=content_bytes, filetype="pdf") as doc:
+                        if len(doc) > 0:
+                            pix = doc[0].get_pixmap(dpi=150)
+                            png_bytes = pix.tobytes("png")
+                            vision_extracted = extract_bill_from_image_claude(png_bytes, "image/png")
+                            if vision_extracted:
+                                extracted = vision_extracted
+                                engine_used = "Claude Vision (Scanned PDF OCR)"
+                except Exception as sc_err:
+                    logger.debug("Scanned PDF OCR attempt error: %s", sc_err)
+
+        # C. Text / CSV Transcripts
         else:
             raw_text = content_bytes.decode("utf-8", errors="ignore")
             engine_used = "Direct File Parser"
+            extracted = parse_discom_bill_text(raw_text)
+
     except Exception as e:
         return {
             "success": False,
@@ -138,14 +267,12 @@ def process_uploaded_bill(content_bytes: bytes, filename: str) -> Dict[str, Any]
             "engine": engine_used,
         }
 
-    extracted = parse_discom_bill_text(raw_text)
-
-    # If key fields are found, consider extraction a success
     has_kwh = "total_kwh" in extracted
     has_amount = "total_amount_inr" in extracted
+    success = bool(has_kwh or has_amount)
 
     return {
-        "success": has_kwh or has_amount,
+        "success": success,
         "engine": engine_used,
         "filename": filename,
         "text_length": len(raw_text),

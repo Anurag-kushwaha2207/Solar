@@ -2,7 +2,7 @@ import axios from 'axios'
 import { auth } from './firebase'
 
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: import.meta.env.VITE_API_URL || '/api',
   headers: { 'Content-Type': 'application/json' },
 })
 
@@ -17,10 +17,12 @@ api.interceptors.request.use(async (config) => {
         return config
       }
     }
-    // Fallback: Use stored token or demo token for local development
-    const storedToken = localStorage.getItem('urjamind_token') || 'demo-token-urjamind-2026'
-    if (storedToken) {
-      config.headers.Authorization = `Bearer ${storedToken}`
+    // Fallback: Use stored token or demo token strictly in local development
+    if (import.meta.env.DEV) {
+      const storedToken = localStorage.getItem('urjamind_token') || 'demo-token-urjamind-2026'
+      if (storedToken) {
+        config.headers.Authorization = `Bearer ${storedToken}`
+      }
     }
   } catch (err) {
     console.warn('Axios authorization interceptor error:', err)

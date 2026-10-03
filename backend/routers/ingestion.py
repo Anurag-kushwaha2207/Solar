@@ -16,7 +16,7 @@ from bill_ocr import process_uploaded_bill
 
 
 @router.post("/upload-bill")
-async def upload_bill(file: UploadFile = File(...), plant_id: int = Form(1)):
+async def upload_bill(file: UploadFile = File(...), plant_id: str = Form("1")):
     """
     Bill upload endpoint.
     Extracts consumption, demand, PF, and payable amount from digital PDF or text bills via PyMuPDF.
@@ -70,7 +70,7 @@ async def upload_bill(file: UploadFile = File(...), plant_id: int = Form(1)):
 
 
 @router.post("/upload-meter-data")
-async def upload_meter_data(file: UploadFile = File(...), plant_id: int = Form(1)):
+async def upload_meter_data(file: UploadFile = File(...), plant_id: str = Form("1")):
     """
     Interval meter data upload.
     If valid CSV is uploaded, parses rows, calculates actual total_kwh and peak_kw,
