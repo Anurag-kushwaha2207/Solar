@@ -23,6 +23,100 @@ import fitz  # PyMuPDF
 logger = logging.getLogger("urjamind.production_parser")
 
 
+def parse_production_from_kv_table(text: str) -> Dict[str, Any]:
+    """
+    Parse production log PDFs with Field | Value table format.
+    Handles both two-column and alternating-line (PyMuPDF) formats.
+    """
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
+    kv_map = {}
+
+    # Try two-column format first
+    for line in lines:
+        parts = re.split(r'\t|  +', line)
+        if len(parts) >= 2:
+            key = parts[0].strip().lower()
+            val = parts[-1].strip()
+            if key and val and key != val.lower():
+                kv_map[key] = val
+
+    # Fallback: alternating-line format
+    if not kv_map:
+        known_field_names = {
+            "company", "production date", "shift", "product type",
+            "planned quantity", "actual quantity", "machine runtime", "downtime",
+            "energy used", "energy per unit", "operator", "field", "dummy value"
+        }
+        i = 0
+        while i < len(lines) - 1:
+            key_candidate = lines[i].lower()
+            val_candidate = lines[i + 1]
+            if key_candidate in known_field_names:
+                kv_map[key_candidate] = val_candidate
+                i += 2
+            else:
+                i += 1
+
+    # Detect if this is a production log form
+    kv_indicator_keys = {"actual quantity", "planned quantity", "energy used", "energy per unit",
+                         "machine runtime", "production date", "shift", "product type"}
+    if not set(kv_map.keys()).intersection(kv_indicator_keys):
+        return {"success": False, "total_production_kg": 0.0, "days_detected": 30}
+
+    production_units = 0.0
+    energy_kwh = 0.0
+    energy_per_unit = 0.0
+
+    # Actual quantity (prefer over planned)
+    for k in ["actual quantity", "actual output", "quantity produced"]:
+        if k in kv_map:
+            nums = re.findall(r'[\d,]+(?:\.\d+)?', kv_map[k])
+            if nums:
+                production_units = float(nums[0].replace(',', ''))
+            break
+
+    if production_units == 0:
+        for k in ["planned quantity", "quantity"]:
+            if k in kv_map:
+                nums = re.findall(r'[\d,]+(?:\.\d+)?', kv_map[k])
+                if nums:
+                    production_units = float(nums[0].replace(',', ''))
+                break
+
+    # Energy used
+    for k in ["energy used", "energy consumed", "kwh used"]:
+        if k in kv_map:
+            nums = re.findall(r'[\d,]+(?:\.\d+)?', kv_map[k])
+            if nums:
+                energy_kwh = float(nums[0].replace(',', ''))
+            break
+
+    # Energy per unit
+    for k in ["energy per unit", "specific energy", "kwh/unit"]:
+        if k in kv_map:
+            nums = re.findall(r'[\d.]+', kv_map[k])
+            if nums:
+                energy_per_unit = float(nums[0])
+            break
+
+    # This is a single-day log — multiply by 26 working days for monthly estimate
+    # But we label it clearly as one-day data
+    if production_units > 0:
+        return {
+            "success": True,
+            "total_production_units": production_units,
+            "total_production_kg": production_units,  # treat units=kg equivalent for SEC calc
+            "energy_kwh_day": energy_kwh,
+            "energy_per_unit": energy_per_unit,
+            "days_detected": 1,
+            "unit": "units",
+            "note": "Single-day production log — multiplied by 26 working days for monthly estimate",
+        }
+
+    return {"success": False, "total_production_kg": 0.0, "days_detected": 30}
+
+
+
 def parse_production_from_df(df: pd.DataFrame) -> Dict[str, Any]:
     """Parse production totals and shift stats from DataFrame."""
     cols_lower = {c: str(c).strip().lower().replace(" ", "_") for c in df.columns}
@@ -128,7 +222,10 @@ def process_production_file(content_bytes: bytes, filename: str) -> Dict[str, An
                 for page in doc:
                     text_chunks.append(page.get_text())
             pdf_text = "\n".join(text_chunks)
-            res = parse_production_from_text(pdf_text)
+            # Try key-value format first (dummy/structured PDFs)
+            res = parse_production_from_kv_table(pdf_text)
+            if not res.get("success"):
+                res = parse_production_from_text(pdf_text)
         else:
             text = content_bytes.decode("utf-8", errors="ignore")
             res = parse_production_from_text(text)
@@ -147,11 +244,13 @@ def process_production_file(content_bytes: bytes, filename: str) -> Dict[str, An
 
     total_kg = res["total_production_kg"]
     days = res.get("days_detected", 30)
+    energy_per_unit = res.get("energy_per_unit", 0.0)
     return {
         "success": True,
         "mode": "production_parsed",
         "file": filename,
         "days_detected": days,
         "total_production_kg": total_kg,
+        "energy_per_unit": energy_per_unit,
         "message": f"Successfully extracted {total_kg:,.0f} kg manufacturing output ({days} production days) from {filename}.",
     }

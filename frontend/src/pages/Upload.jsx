@@ -377,7 +377,18 @@ export default function Upload() {
 
         {/* Actions */}
         <div className="upload-actions">
-          <button className="btn btn-primary" style={{fontSize:16,padding:'14px 36px'}} onClick={() => setShowModal(true)}>
+          <button
+            className="btn btn-primary"
+            style={{fontSize:16,padding:'14px 36px'}}
+            onClick={async () => {
+              if (confirmationData) {
+                try {
+                  await confirmBill(confirmationData)
+                } catch {}
+              }
+              setShowModal(true)
+            }}
+          >
             🧠 Analyse My Plant Data
           </button>
           <button className="btn btn-secondary" onClick={handleDemo}>

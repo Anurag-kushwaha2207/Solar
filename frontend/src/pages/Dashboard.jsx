@@ -219,12 +219,12 @@ export default function Dashboard() {
             <div>
               <h1 className="section-title">Energy Intelligence Dashboard</h1>
               <p style={{color:'var(--text2)',fontSize:13,marginTop:4,display:'flex',alignItems:'center',gap:8,flexWrap:'wrap'}}>
-                <span style={{fontWeight:600,color:'var(--text)'}}>{kpis?.plant || 'Rajkot Foundry'}</span>
+                <span style={{fontWeight:600,color:'var(--text)'}}>{kpis?.plant || 'Rajkot Precision Foundry'}</span>
                 <span>·</span>
                 <span>{kpis?.period || 'Sep 2026'}</span>
                 <span>·</span>
                 <span className={`badge ${kpis?.is_custom ? 'badge-green' : 'badge-blue'}`} style={{fontSize:11}}>
-                  {kpis?.is_custom ? `📁 Custom Data (${kpis?.kpis?.total_kwh?.toLocaleString()} kWh)` : '⚡ Baseline Physics Model'}
+                  {kpis?.is_custom ? `🟢 Source: Uploaded Data (${kpis?.kpis?.total_kwh?.toLocaleString()} kWh)` : '⚡ Demo: Rajkot Precision Foundry (48,240 kWh)'}
                 </span>
               </p>
             </div>
@@ -242,10 +242,42 @@ export default function Dashboard() {
             </div>
           ) : kpis && (
             <div className="kpi-grid">
-              <KpiCard label="Total Consumption" value={kpis.kpis.total_kwh.toLocaleString()} unit="kWh this month" delta="↑ 12.1% above baseline" deltaType="up" icon="⚡" color="blue" />
-              <KpiCard label="Specific Energy" value={kpis.kpis.specific_energy} unit="kWh per kg casting" delta={`⚠ ${kpis.deviation_pct}% above baseline (3.42)`} deltaType="warn" icon="🏷" color="amber" />
-              <KpiCard label="Power Factor" value={kpis.kpis.avg_power_factor} unit="Avg this month" delta={`PF Penalty ₹${(kpis.kpis.pf_penalty_inr||0).toLocaleString()}`} deltaType="warn" icon="📊" color="green" />
-              <KpiCard label="Total Bill" value={`₹${((kpis.kpis.total_amount_inr||kpis.kpis.total_cost_inr||296500)/1000).toFixed(0)}K`} unit="Sep 2026" delta="₹6.08/kWh blended" deltaType="up" icon="💸" color="red" />
+              <KpiCard
+                label="Total Consumption"
+                value={kpis.kpis.total_kwh.toLocaleString()}
+                unit="kWh this month"
+                delta={kpis.deviation_pct ? `${kpis.deviation_pct > 0 ? '↑' : '↓'} ${Math.abs(kpis.deviation_pct)}% vs baseline` : 'Baseline active'}
+                deltaType={kpis.deviation_pct > 0 ? 'warn' : 'up'}
+                icon="⚡"
+                color="blue"
+              />
+              <KpiCard
+                label="Specific Energy"
+                value={kpis.kpis.specific_energy}
+                unit="kWh per unit output"
+                delta={`⚠ ${kpis.deviation_pct}% vs baseline (3.42)`}
+                deltaType="warn"
+                icon="🏷"
+                color="amber"
+              />
+              <KpiCard
+                label="Power Factor"
+                value={kpis.kpis.avg_power_factor}
+                unit="Avg this month"
+                delta={(kpis.kpis.pf_penalty_inr || 0) > 0 ? `PF Penalty ₹${Math.round(kpis.kpis.pf_penalty_inr).toLocaleString()}` : '✅ No penalty (healthy PF)'}
+                deltaType={(kpis.kpis.pf_penalty_inr || 0) > 0 ? 'warn' : 'up'}
+                icon="📊"
+                color="green"
+              />
+              <KpiCard
+                label="Total Bill"
+                value={`₹${Math.round(kpis.kpis.total_amount_inr || kpis.kpis.total_cost_inr || 296500).toLocaleString()}`}
+                unit={kpis?.period || "Sep 2026"}
+                delta={`₹${(kpis.kpis.total_kwh > 0 ? ((kpis.kpis.total_amount_inr || 296500) / kpis.kpis.total_kwh).toFixed(2) : '6.08')}/kWh blended`}
+                deltaType="up"
+                icon="💸"
+                color="red"
+              />
             </div>
           )}
 
@@ -298,7 +330,7 @@ export default function Dashboard() {
           <div className="charts-row" style={{marginTop:20}}>
             <div className="chart-card" style={{flex:1.2}}>
               <div className="chart-title">Machine-Level Breakdown</div>
-              <div className="chart-sub">AI-estimated energy per equipment</div>
+              <div className="chart-sub">AI-estimated energy per equipment (estimated — demo split)</div>
               <table className="machine-table">
                 <thead><tr><th>Machine</th><th>kWh</th><th>Share</th><th>PF</th><th>Status</th></tr></thead>
                 <tbody>

@@ -126,7 +126,9 @@ def test_carbon_report():
 
 def test_sample_factory_data_upload_sync():
     """12. Real Sample Factory CSV Upload: 441.5 kWh updates Dashboard, Carbon, and Copilot simultaneously."""
-    with open("../data/sample_factory_data.csv", "rb") as f:
+    import os
+    csv_path = "../data/sample_factory_data.csv" if os.path.exists("../data/sample_factory_data.csv") else "data/sample_factory_data.csv"
+    with open(csv_path, "rb") as f:
         file_bytes = f.read()
 
     r = client.post(

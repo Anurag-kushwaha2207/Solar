@@ -30,79 +30,118 @@ import fitz  # PyMuPDF
 logger = logging.getLogger("urjamind.bill_ocr")
 
 
-def parse_discom_bill_text(text: str) -> Dict[str, Any]:
+def parse_key_value_table(text: str) -> Dict[str, Any]:
     """
-    Apply regular expression patterns across DISCOM electricity bill layouts.
-    Extracts key billing metrics with robust multi-format matching.
+    Parse PDFs with a two-column key-value table (Field | Value).
+    Handles both two-column (tab/spaces) and alternating-line (PyMuPDF) formats.
     """
     extracted: Dict[str, Any] = {}
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
+    kv_map = {}
 
-    # 1. Total Consumption (kWh / Units)
-    # Patterns: "Total Consumption : 48240", "Total Units: 48,240", "Billed Units 48240", "Active Energy: 48240"
-    kwh_match = re.search(
-        r"(?:total\s*(?:active\s*)?(?:consumption|units|kwh)|billed\s*units|consumption\s*kwh)\s*[:=\-]?\s*([0-9,]+(?:\.[0-9]+)?)",
-        text, re.IGNORECASE
-    )
-    if kwh_match:
-        extracted["total_kwh"] = float(kwh_match.group(1).replace(",", ""))
+    # Try two-column format first (tab or 2+ spaces)
+    for line in lines:
+        parts = re.split(r'\t|  +', line)
+        if len(parts) >= 2:
+            key = parts[0].strip().lower()
+            val = parts[-1].strip()
+            if key and val and key != val.lower():
+                kv_map[key] = val
 
-    # 2. Total kVAh
-    kvah_match = re.search(
-        r"(?:total\s*kvah|billed\s*kvah|apparent\s*energy)\s*[:=\-]?\s*([0-9,]+(?:\.[0-9]+)?)",
-        text, re.IGNORECASE
-    )
-    if kvah_match:
-        extracted["total_kvah"] = float(kvah_match.group(1).replace(",", ""))
+    # Fallback: alternating-line format (PyMuPDF output: key line, then value line)
+    if not kv_map:
+        known_bill_fields = {
+            "consumer name", "customer name", "company", "billing name",
+            "consumer no.", "consumer no", "account no", "meter no",
+            "billing month", "bill month", "billing period", "period",
+            "units consumed", "total units", "energy consumed",
+            "maximum demand", "max demand",
+            "power factor",
+            "time-of-day charges", "tod charges",
+            "energy charges", "demand charges",
+            "total bill amount", "net payable", "amount payable", "total amount",
+            "due date", "field", "dummy value"
+        }
+        i = 0
+        while i < len(lines) - 1:
+            key_candidate = lines[i].lower()
+            val_candidate = lines[i + 1]
+            if key_candidate in known_bill_fields:
+                kv_map[key_candidate] = val_candidate
+                i += 2
+            else:
+                i += 1
 
-    # 3. Contract Demand / Sanctioned Load (kVA / kW)
-    cd_match = re.search(
-        r"(?:contract\s*demand|sanctioned\s*load|connected\s*load|contract\s*load)\s*[:=\-]?\s*([0-9,]+(?:\.[0-9]+)?)\s*(?:kva|kw)?",
-        text, re.IGNORECASE
-    )
-    if cd_match:
-        extracted["contract_demand_kva"] = float(cd_match.group(1).replace(",", ""))
+    # Consumer / Company Name
+    for k in ["consumer name", "customer name", "company", "billing name", "name of consumer"]:
+        if k in kv_map:
+            name = re.sub(r'\s*\(dummy\)\s*', '', kv_map[k], flags=re.IGNORECASE).strip()
+            if len(name) >= 3:
+                extracted["consumer_name"] = name
+            break
 
-    # 4. Maximum Demand (MD / Billed Demand kVA)
-    md_match = re.search(
-        r"(?:billing\s*demand|recorded\s*demand|actual\s*demand|max\s*demand|md\s*kva|m\.d\.)\s*[:=\-]?\s*([0-9,]+(?:\.[0-9]+)?)\s*(?:kva)?",
-        text, re.IGNORECASE
-    )
-    if md_match:
-        extracted["max_demand_kva"] = float(md_match.group(1).replace(",", ""))
+    # Billing Month
+    for k in ["billing month", "bill month", "billing period", "bill period", "period"]:
+        if k in kv_map:
+            extracted["month"] = kv_map[k]
+            break
 
-    # 5. Average Power Factor (PF)
-    pf_match = re.search(
-        r"(?:power\s*factor|avg\s*p\.?f\.?|p\.?f\.?)\s*[:=\-]?\s*([0-1]\.[0-9]+)",
-        text, re.IGNORECASE
-    )
-    if pf_match:
-        extracted["power_factor"] = float(pf_match.group(1))
+    # Units / kWh
+    for k in ["units consumed", "total units", "energy consumed", "total kwh", "units"]:
+        if k in kv_map:
+            nums = re.findall(r'[\d,]+(?:\.\d+)?', kv_map[k])
+            if nums:
+                extracted["total_kwh"] = float(nums[0].replace(',', ''))
+            break
 
-    # 6. Total Amount Payable (INR)
-    amt_match = re.search(
-        r"(?:net\s*payable|amount\s*payable|total\s*bill\s*amount|bill\s*amount|total\s*payable|gross\s*amount|total\s*amount)\s*[:=\-]*\s*(?:rs\.?|inr|₹)?\s*([0-9,]+(?:\.[0-9]+)?)",
-        text, re.IGNORECASE
-    )
-    if amt_match:
-        extracted["total_amount_inr"] = float(amt_match.group(1).replace(",", ""))
+    # Maximum Demand
+    for k in ["maximum demand", "max demand", "billed demand", "md kva", "recorded demand"]:
+        if k in kv_map:
+            nums = re.findall(r'[\d,]+(?:\.\d+)?', kv_map[k])
+            if nums:
+                extracted["max_demand_kva"] = float(nums[0].replace(',', ''))
+            break
 
-    # 7. ToD Peak & Off-Peak
-    peak_match = re.search(
-        r"(?:tod\s*peak|peak\s*units|peak\s*consumption)\s*[:=\-]?\s*([0-9,]+(?:\.[0-9]+)?)",
-        text, re.IGNORECASE
-    )
-    if peak_match:
-        extracted["tod_peak_kwh"] = float(peak_match.group(1).replace(",", ""))
+    # Power Factor
+    for k in ["power factor", "avg pf", "p.f.", "pf"]:
+        if k in kv_map:
+            nums = re.findall(r'0\.\d+|\d+\.\d+', kv_map[k])
+            if nums:
+                pf = float(nums[0])
+                if 0.5 <= pf <= 1.0:
+                    extracted["power_factor"] = pf
+            break
 
-    offpeak_match = re.search(
-        r"(?:tod\s*off[- ]?peak|night\s*units|off[- ]?peak\s*(?:consumption|units)?)\s*[:=\-]?\s*([0-9,]+(?:\.[0-9]+)?)",
-        text, re.IGNORECASE
-    )
-    if offpeak_match:
-        extracted["tod_offpeak_kwh"] = float(offpeak_match.group(1).replace(",", ""))
+    # Total Bill Amount
+    for k in ["total bill amount", "net payable", "amount payable", "total amount", "bill amount", "total payable", "gross amount"]:
+        if k in kv_map:
+            raw = kv_map[k]
+            # Remove (dummy), all currency symbols (₹, I, n, N, Rs), spaces
+            cleaned = re.sub(r'\(dummy\)', '', raw, flags=re.IGNORECASE)
+            cleaned = re.sub(r'[^\d,.]', '', cleaned)  # keep only digits, commas, dots
+            # Remove commas and parse (handles Indian format 1,76,450)
+            cleaned = cleaned.replace(',', '')
+            if cleaned:
+                try:
+                    extracted["total_amount_inr"] = float(cleaned)
+                except ValueError:
+                    pass
+            break
 
+    # PF Penalty / ToD charges
+    for k in ["pf penalty", "power factor penalty", "time-of-day charges", "tod charges"]:
+        if k in kv_map:
+            raw = kv_map[k]
+            cleaned = re.sub(r'\(dummy\)', '', raw, flags=re.IGNORECASE)
+            cleaned = re.sub(r'[^\d,.]', '', cleaned)
+            cleaned = cleaned.replace(',', '')
+            if cleaned:
+                try:
+                    extracted["pf_penalty_inr"] = float(cleaned)
+                except ValueError:
+                    pass
 
-    # 8. Consumer No & DISCOM Name
+    # DISCOM
     discom_match = re.search(
         r"(PGVCL|DGVCL|MGVCL|UGVCL|MSEDCL|BESCOM|TNEB|Tata Power|Torrent Power|Adani Electricity|BSES|CESC|JVVNL|AVVNL|DHBVN|UHBVN|UPPCL|WBSEDCL|APDCL|KSEB)",
         text, re.IGNORECASE
@@ -110,35 +149,122 @@ def parse_discom_bill_text(text: str) -> Dict[str, Any]:
     if discom_match:
         extracted["discom"] = discom_match.group(1).upper()
 
-    # 9. Company / Consumer Name
-    name_match = re.search(
-        r"(?:consumer\s*name|name\s*of\s*consumer|customer\s*name|company\s*name|m\/s\.?|billing\s*name)\s*[:=\-]?\s*([A-Za-z0-9\s\.\,\&\-\(\)\/]{3,60}?)(?:\n|\r|address|consumer|acc|tariff|bill|date|meter|pin|gstin)",
-        text, re.IGNORECASE
-    )
-    if name_match:
-        c_name = name_match.group(1).strip(" :,-\t\r\n")
-        if len(c_name) >= 3 and not any(skip in c_name.lower() for skip in ["address", "meter", "tariff", "subdivision"]):
-            extracted["consumer_name"] = c_name
-    else:
-        # Fallback: look for M/s or common industrial company name suffixes
-        comp_match = re.search(
-            r"([A-Za-z0-9\s\.\,\&\-]{3,50}\s+(?:pvt\.?\s*ltd\.?|ltd\.?|limited|industries|enterprise[s]?|foundry|engineering|textiles|polymers|steel[s]?|casting[s]?|works|mills|forge))\b",
+    return extracted
+
+
+def parse_discom_bill_text(text: str) -> Dict[str, Any]:
+    """
+    Parse electricity bill text. First tries key-value table parsing,
+    then supplements with regex for any missing fields.
+    """
+    # Step 1: key-value table parse (handles dummy PDFs and structured formats)
+    extracted = parse_key_value_table(text)
+
+    # Step 2: regex fallback for fields not found by key-value parser
+    if "total_kwh" not in extracted:
+        m = re.search(
+            r"(?:total\s*(?:active\s*)?(?:consumption|units|kwh)|billed\s*units|units\s*consumed)\s*[:=\-]?\s*([0-9,]+(?:\.[0-9]+)?)",
             text, re.IGNORECASE
         )
-        if comp_match:
-            extracted["consumer_name"] = comp_match.group(1).strip()
+        if m:
+            extracted["total_kwh"] = float(m.group(1).replace(",", ""))
 
-    # 10. Billing Month / Period
-    month_match = re.search(
-        r"(?:bill\s*(?:month|period|for\s*month)|billing\s*period)\s*[:=\-]?\s*([A-Za-z0-9\s\-\/\.]{3,30}?)(?:\n|\r|bill\s*date|due\s*date|reading)",
-        text, re.IGNORECASE
-    )
-    if month_match:
-        extracted["month"] = month_match.group(1).strip(" :,-\t\r\n")
-    else:
-        m_regex = re.search(r"\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[ -_]?(\d{4})\b", text, re.IGNORECASE)
-        if m_regex:
-            extracted["month"] = f"{m_regex.group(1)} {m_regex.group(2)}"
+    if "total_kvah" not in extracted:
+        m = re.search(
+            r"(?:total\s*kvah|billed\s*kvah|apparent\s*energy)\s*[:=\-]?\s*([0-9,]+(?:\.[0-9]+)?)",
+            text, re.IGNORECASE
+        )
+        if m:
+            extracted["total_kvah"] = float(m.group(1).replace(",", ""))
+
+    if "contract_demand_kva" not in extracted:
+        m = re.search(
+            r"(?:contract\s*demand|sanctioned\s*load|connected\s*load)\s*[:=\-]?\s*([0-9,]+(?:\.[0-9]+)?)\s*(?:kva|kw)?",
+            text, re.IGNORECASE
+        )
+        if m:
+            extracted["contract_demand_kva"] = float(m.group(1).replace(",", ""))
+
+    if "max_demand_kva" not in extracted:
+        m = re.search(
+            r"(?:billing\s*demand|recorded\s*demand|max\s*demand|maximum\s*demand|m\.d\.)\s*[:=\-]?\s*([0-9,]+(?:\.[0-9]+)?)\s*(?:kva)?",
+            text, re.IGNORECASE
+        )
+        if m:
+            extracted["max_demand_kva"] = float(m.group(1).replace(",", ""))
+
+    if "power_factor" not in extracted:
+        m = re.search(
+            r"(?:power\s*factor|avg\s*p\.?f\.?|p\.?f\.?)\s*[:=\-]?\s*([0-1]\.[0-9]+)",
+            text, re.IGNORECASE
+        )
+        if m:
+            extracted["power_factor"] = float(m.group(1))
+
+    if "total_amount_inr" not in extracted:
+        m = re.search(
+            r"(?:net\s*payable|amount\s*payable|total\s*bill\s*amount|bill\s*amount|total\s*payable|gross\s*amount|total\s*amount)\s*[:=\-]*\s*(?:rs\.?|inr|[\u20b9n])?\s*([0-9,]+(?:\.[0-9]+)?)",
+            text, re.IGNORECASE
+        )
+        if m:
+            extracted["total_amount_inr"] = float(m.group(1).replace(",", ""))
+
+    if "tod_peak_kwh" not in extracted:
+        m = re.search(
+            r"(?:tod\s*peak|peak\s*units|peak\s*consumption)\s*[:=\-]?\s*([0-9,]+(?:\.[0-9]+)?)",
+            text, re.IGNORECASE
+        )
+        if m:
+            extracted["tod_peak_kwh"] = float(m.group(1).replace(",", ""))
+
+    if "tod_offpeak_kwh" not in extracted:
+        m = re.search(
+            r"(?:tod\s*off[- ]?peak|night\s*units|off[- ]?peak\s*(?:consumption|units)?)\s*[:=\-]?\s*([0-9,]+(?:\.[0-9]+)?)",
+            text, re.IGNORECASE
+        )
+        if m:
+            extracted["tod_offpeak_kwh"] = float(m.group(1).replace(",", ""))
+
+    if "discom" not in extracted:
+        m = re.search(
+            r"(PGVCL|DGVCL|MGVCL|UGVCL|MSEDCL|BESCOM|TNEB|Tata Power|Torrent Power|Adani Electricity|BSES|CESC|JVVNL|AVVNL|DHBVN|UHBVN|UPPCL|WBSEDCL|APDCL|KSEB)",
+            text, re.IGNORECASE
+        )
+        if m:
+            extracted["discom"] = m.group(1).upper()
+
+    if "consumer_name" not in extracted:
+        m = re.search(
+            r"(?:consumer\s*name|name\s*of\s*consumer|customer\s*name|company\s*name|m\/s\.?|billing\s*name)\s*[:=\-]?\s*([A-Za-z0-9\s\.\,\&\-\(\)\/]{3,60}?)(?:\n|\r|address|consumer|acc|tariff|bill|date|meter|pin|gstin)",
+            text, re.IGNORECASE
+        )
+        if m:
+            c_name = re.sub(r'\s*\(dummy\)\s*', '', m.group(1), flags=re.IGNORECASE).strip(" :,-\t\r\n")
+            if len(c_name) >= 3 and not any(skip in c_name.lower() for skip in ["address", "meter", "tariff"]):
+                extracted["consumer_name"] = c_name
+        else:
+            m2 = re.search(
+                r"([A-Za-z0-9\s\.\,\&\-]{3,50}\s+(?:pvt\.?\s*ltd\.?|ltd\.?|limited|industries|enterprise[s]?|foundry|engineering|textiles|polymers|steel[s]?|casting[s]?|works|mills|forge|manufacturing))\b",
+                text, re.IGNORECASE
+            )
+            if m2:
+                name = re.sub(r'\s*\(dummy\)\s*', '', m2.group(1), flags=re.IGNORECASE).strip()
+                extracted["consumer_name"] = name
+
+    if "month" not in extracted:
+        m = re.search(
+            r"(?:bill\s*(?:month|period|for\s*month)|billing\s*(?:period|month))\s*[:=\-]?\s*([A-Za-z0-9\s\-\/\.]{3,30}?)(?:\n|\r|bill\s*date|due\s*date|reading)",
+            text, re.IGNORECASE
+        )
+        if m:
+            extracted["month"] = m.group(1).strip(" :,-\t\r\n")
+        else:
+            m2 = re.search(
+                r"\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[ -_]?(\d{4})\b",
+                text, re.IGNORECASE
+            )
+            if m2:
+                extracted["month"] = f"{m2.group(1)} {m2.group(2)}"
 
     return extracted
 

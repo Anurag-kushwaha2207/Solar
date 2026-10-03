@@ -40,7 +40,7 @@ async def get_kpis(plant_id: int = 1):
             "max_demand_kva":     round(active_plant.peak_kw / max(0.01, active_plant.avg_pf), 1),
             "specific_energy":    active_plant.specific_energy,
             "avg_power_factor":   active_plant.avg_pf,
-            "pf_penalty_inr":     SEP_PF_PENALTY_INR if active_plant.avg_pf < 0.90 else 0,
+            "pf_penalty_inr":     round(active_plant.pf_penalty_inr, 0) if active_plant.avg_pf < 0.90 else 0,
             "md_penalty_inr":     SEP_MD_PENALTY_INR,
             "total_amount_inr":   active_plant.total_bill_inr,
             "production_kg":      active_plant.production_kg,

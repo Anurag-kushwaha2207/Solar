@@ -33,22 +33,22 @@ async def get_report(plant_id: int = 1):
     total_scope2 = round(sum(monthly_scope2), 2)
 
     audit_payload = {
-        "plant": PLANT_NAME,
-        "period": REPORT_PERIOD,
+        "plant": active_plant.plant_name,
+        "period": active_plant.billing_period,
         "kwh": current_kwh,
         "emission_factor": CEA_EMISSION_FACTOR_KG_PER_KWH,
         "scope1_tco2e": SEP_SCOPE1_TCO2E,
         "scope2_tco2e": sep_scope2,
         "total_tco2e": sep_total,
-        "production_kg": SEP_PRODUCTION_KG,
+        "production_kg": active_plant.production_kg,
     }
     report_sha256 = hashlib.sha256(json.dumps(audit_payload, sort_keys=True).encode()).hexdigest()
 
     return {
-        "plant":    PLANT_NAME,
+        "plant":    active_plant.plant_name,
         "standard": "GHG Protocol Corporate Standard",
         "boundary": "Operational Control — Single Plant",
-        "period":   REPORT_PERIOD,
+        "period":   active_plant.billing_period,
         "report_sha256": report_sha256,
         "scope2": {
             "monthly_tco2e":    monthly_scope2,
@@ -77,7 +77,7 @@ async def get_report(plant_id: int = 1):
         },
         "mv_table": [
             {
-                "name":           "Compressor idle-elimination (verified simulation)",
+                "name":           "Compressor idle-elimination (simulated)",
                 "baseline_kwh":   COMPRESSOR_SAVING_KWH * 2,   # 740 kWh was wasted
                 "actual_kwh":     COMPRESSOR_SAVING_KWH,        # 370 remaining
                 "saving_kwh":     COMPRESSOR_SAVING_KWH,
@@ -110,10 +110,10 @@ async def get_report(plant_id: int = 1):
         "audit_trail": [
             {"action": "Plant interval data ingested",   "detail": f"{int(current_kwh):,} kWh · {active_plant.source} ({active_plant.filename})"},
             {"action": "Scope 2 calculated",              "detail": f"{int(current_kwh):,} × {CEA_EMISSION_FACTOR_KG_PER_KWH} ÷ 1000 = {sep_scope2} tCO₂e"},
-            {"action": "Scope 1 — diesel log entered",    "detail": f"Sep: {SEP_SCOPE1_TCO2E} tCO₂e"},
+            {"action": "Scope 1 — Diesel / Fuel benchmark","detail": f"Sep: {SEP_SCOPE1_TCO2E} tCO₂e (facility estimate)"},
             {"action": "Emission factor source",          "detail": EF_SOURCE},
-            {"action": "Internal verification status",   "detail": "Phase 1 pipeline — internal audit trail verified"},
-            {"action": "Cryptographic signature",        "detail": f"SHA-256: {report_sha256[:16]}...{report_sha256[-8:]} (verifiable payload digest)"},
+            {"action": "Internal verification status",   "detail": "Phase 1 pipeline — internal audit log registered"},
+            {"action": "Payload Hash (Audit Trail)",      "detail": f"SHA-256: {report_sha256[:16]}...{report_sha256[-8:]} (payload hash)"},
         ],
         "data_source": active_plant.source,
         "filename": active_plant.filename,

@@ -104,7 +104,7 @@ export default function Scheduler() {
           {id:6,job_name:'Compressor (shift)',constraint:'Cheapest hours',current_start:6/24,current_end:10.75/24,optimal_start:10/24,optimal_end:14.75/24,saving_inr:0,is_flexible:true},
         ]
         setJobs(fallback)
-        setResult({saving_inr_month:47500, saving_pct:16.5, current_cost_inr_day:11499, optimal_cost_inr_day:9599})
+        setResult({saving_inr_month:47500, saving_pct:16.2, current_cost_inr_day:11499, optimal_cost_inr_day:9599})
       })
       .finally(() => setLoading(false))
 
@@ -143,7 +143,7 @@ export default function Scheduler() {
   }
 
   const monthlySaving = result?.saving_inr_month ?? 47500
-  const savingPct = result?.saving_pct ?? 16.5
+  const savingPct = result?.saving_pct ?? 16.2
 
   return (
     <div className="page">

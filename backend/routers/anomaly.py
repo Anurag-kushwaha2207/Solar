@@ -50,7 +50,7 @@ ALERTS = [
         "alert_type": "pf_drop",
         "severity": "low",
         "title": "Power Factor Drop — Capacitor Bank",
-        "description": "Measured PF: 0.870. DISCOM penalty active (target >= 0.90).",
+        "description": "Measured PF: 0.870 (DISCOM penalty ₹3,200). Capacitor tuning recovers ₹1,200/mo immediate loss.",
         "potential_saving_inr": ANOMALY_SAVING_PF_INR,
         "potential_saving_kwh": 0,
         "method": "measured",

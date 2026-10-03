@@ -48,6 +48,178 @@ DEFAULT_EQUIPMENT_KEYWORDS = {
     "motor": {"type": "motor_general", "duty_factor": 0.55, "default_pf": 0.86},
 }
 
+def parse_equipment_from_kv_table(text: str) -> List[Dict[str, Any]]:
+    """
+    Parse equipment PDFs with key-value format.
+    Handles both:
+    - Two-column format: 'Machine Name   CNC Production Machine'
+    - Alternating line format (PyMuPDF output): key on line N, value on line N+1
+    """
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
+    kv_map = {}
+
+    # Try two-column format first (tab or 2+ spaces)
+    for line in lines:
+        parts = re.split(r'\t|  +', line)
+        if len(parts) >= 2:
+            key = parts[0].strip().lower()
+            val = parts[-1].strip()
+            if key and val and key != val.lower():
+                kv_map[key] = val
+
+    # If no KV pairs found, try alternating-line format
+    if not kv_map:
+        known_field_names = {
+            "company", "equipment id", "machine name", "equipment name",
+            "equipment type", "rated power", "quantity", "motor type",
+            "installation year", "operating hours/day", "estimated efficiency",
+            "status", "maintenance cycle", "field", "dummy value"
+        }
+        i = 0
+        while i < len(lines) - 1:
+            key_candidate = lines[i].strip().lower()
+            val_candidate = lines[i + 1].strip()
+            # Accept if the key matches a known field name
+            if key_candidate in known_field_names:
+                kv_map[key_candidate] = val_candidate
+                i += 2
+            else:
+                i += 1
+
+    # Detect if this looks like an equipment form
+    kv_indicator_keys = {"machine name", "equipment name", "rated power", "quantity",
+                         "equipment type", "motor type", "equipment id"}
+    if not set(kv_map.keys()).intersection(kv_indicator_keys):
+        return []  # Not a key-value equipment form
+
+    # --- Extract fields ---
+    machine_name = None
+    for k in ["machine name", "equipment name", "item name", "description"]:
+        if k in kv_map:
+            machine_name = re.sub(r'\s*\(dummy\)\s*', '', kv_map[k], flags=re.IGNORECASE).strip()
+            break
+
+    # Rating in kW
+    rating_kw = 0.0
+    for k in ["rated power", "rating", "power rating", "capacity", "rated kw", "kw rating"]:
+        if k in kv_map:
+            kw_m = re.search(r'([\d.]+)\s*(?:kw|k\.w\.)', kv_map[k], re.IGNORECASE)
+            hp_m = re.search(r'([\d.]+)\s*(?:hp|h\.p\.)', kv_map[k], re.IGNORECASE)
+            if kw_m:
+                rating_kw = float(kw_m.group(1))
+            elif hp_m:
+                rating_kw = round(float(hp_m.group(1)) * 0.746, 1)
+            else:
+                nums = re.findall(r'[\d.]+', kv_map[k])
+                if nums:
+                    rating_kw = float(nums[0])
+            break
+
+    # Quantity
+    qty = 1
+    for k in ["quantity", "qty", "count", "nos", "units", "number"]:
+        if k in kv_map:
+            nums = re.findall(r'\d+', kv_map[k])
+            if nums:
+                qty = int(nums[0])
+            break
+
+    # Operating hours → duty factor
+    duty_factor = 0.60
+    for k in ["operating hours/day", "operating hours per day", "hours/day", "duty cycle"]:
+        if k in kv_map:
+            nums = re.findall(r'[\d.]+', kv_map[k])
+            if nums:
+                hours = float(nums[0])
+                duty_factor = round(min(hours / 24.0, 0.95), 2)
+            break
+
+    # Efficiency
+    efficiency = 0.88
+    for k in ["estimated efficiency", "efficiency", "rated efficiency"]:
+        if k in kv_map:
+            nums = re.findall(r'[\d.]+', kv_map[k])
+            if nums:
+                eff = float(nums[0])
+                efficiency = eff / 100.0 if eff > 1 else eff
+            break
+
+    # Machine type from Equipment Type field or name keywords
+    machine_type = "industrial_equipment"
+    type_str = kv_map.get("equipment type", kv_map.get("motor type", machine_name or "")).lower()
+    for kw, meta in DEFAULT_EQUIPMENT_KEYWORDS.items():
+        if kw in type_str:
+            machine_type = meta["type"]
+            duty_factor = meta.get("duty_factor", duty_factor)
+            break
+
+    if not machine_name:
+        machine_name = kv_map.get("equipment type", "Unknown Equipment")
+        machine_name = re.sub(r'\s*\(dummy\)\s*', '', machine_name, flags=re.IGNORECASE).strip()
+
+    if rating_kw <= 0:
+        rating_kw = 22.0  # Sensible default
+
+    # If quantity > 1 (e.g. 4 CNC machines), expand into individual physical machine units
+    if 1 < qty <= 8:
+        machines = []
+        for unit_idx in range(1, qty + 1):
+            machines.append({
+                "name": f"{machine_name} #{unit_idx} ({rating_kw:.0f} kW)",
+                "raw_name": f"{machine_name} #{unit_idx}",
+                "rating_kw": rating_kw,
+                "quantity": 1,
+                "total_kw": rating_kw,
+                "duty_factor": duty_factor,
+                "type": machine_type,
+                "efficiency": efficiency,
+            })
+        # Account for common plant auxiliary & lighting load
+        aux_kw = round(rating_kw * 0.15, 1)
+        machines.append({
+            "name": "Plant Lighting & Auxiliaries",
+            "raw_name": "Lighting & Aux",
+            "rating_kw": aux_kw,
+            "quantity": 1,
+            "total_kw": aux_kw,
+            "duty_factor": 0.40,
+            "type": "utilities",
+            "efficiency": 0.95,
+        })
+        return machines
+
+    formatted_name = machine_name
+    if qty > 1 and f"x{qty}" not in formatted_name.lower() and f"*{qty}" not in formatted_name:
+        formatted_name = f"{formatted_name} (x{qty})"
+    if f"{int(rating_kw)} kW" not in formatted_name and f"{rating_kw} kW" not in formatted_name:
+        formatted_name = f"{formatted_name} ({rating_kw:.0f} kW)" if rating_kw == int(rating_kw) else f"{formatted_name} ({rating_kw:.1f} kW)"
+
+    aux_kw = round(rating_kw * 0.15, 1)
+    return [
+        {
+            "name": formatted_name,
+            "raw_name": machine_name,
+            "rating_kw": rating_kw,
+            "quantity": qty,
+            "total_kw": round(rating_kw * qty, 1),
+            "duty_factor": duty_factor,
+            "type": machine_type,
+            "efficiency": efficiency,
+        },
+        {
+            "name": "Plant Lighting & Auxiliaries",
+            "raw_name": "Lighting & Aux",
+            "rating_kw": aux_kw,
+            "quantity": 1,
+            "total_kw": aux_kw,
+            "duty_factor": 0.40,
+            "type": "utilities",
+            "efficiency": 0.95,
+        }
+    ]
+
+
+
 
 def parse_equipment_from_df(df: pd.DataFrame) -> List[Dict[str, Any]]:
     """Extract equipment items from a pandas DataFrame (CSV/Excel)."""
@@ -226,7 +398,11 @@ def process_equipment_file(content_bytes: bytes, filename: str) -> Dict[str, Any
                 for page in doc:
                     text_chunks.append(page.get_text())
             pdf_text = "\n".join(text_chunks)
-            machines = parse_equipment_from_text(pdf_text)
+            # First try key-value table format (handles dummy/structured single-machine PDFs)
+            machines = parse_equipment_from_kv_table(pdf_text)
+            if not machines:
+                # Fall through to general text parser
+                machines = parse_equipment_from_text(pdf_text)
 
         # D. Plain Text
         else:

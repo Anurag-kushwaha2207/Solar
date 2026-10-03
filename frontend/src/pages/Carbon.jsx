@@ -4,9 +4,19 @@ import toast from 'react-hot-toast'
 import { fetchCarbonReport, fetchIntensity } from '../api'
 import './Carbon.css'
 
+const BUYER_LABELS = {
+  scope2_location_based: 'Scope 2 Location-Based Accounting',
+  scope1_direct: 'Scope 1 Direct Benchmark Accounted',
+  ghg_protocol_aligned: 'GHG Protocol Aligned Framework',
+  emission_intensity_metric: 'Specific Emission Intensity Metric',
+  machine_readable_api: 'Machine-Readable ESG Export API',
+  third_party_verified: 'Third-Party Verification Audit',
+}
+
 function MvRow({ item, i }) {
   const statusBadge = {
     verified:  <span className="badge badge-green">✓ Verified</span>,
+    simulated: <span className="badge badge-blue">⚡ Simulated</span>,
     projected: <span className="badge badge-amber">◎ Projected</span>,
   }
   return (
@@ -19,7 +29,7 @@ function MvRow({ item, i }) {
         {item.co2_avoided_t > 0 ? `${item.co2_avoided_t} tCO₂e` : '—'}
       </td>
       <td style={{fontWeight:700}}>₹{item.saving_inr.toLocaleString()}</td>
-      <td>{statusBadge[item.status]}</td>
+      <td>{statusBadge[item.status] || <span className="badge badge-blue">⚡ Simulated</span>}</td>
     </tr>
   )
 }
@@ -35,25 +45,25 @@ export default function Carbon() {
       .then(([r, t]) => { setReport(r); setIntensity(t) })
       .catch(() => {
         setReport({
-          plant:'Rajkot Precision Foundry Pvt. Ltd.',
+          plant:'Industrial Manufacturing Plant',
           period:'Apr 2026 – Sep 2026',
           combined:{months:['Apr','May','Jun','Jul','Aug','Sep'],scope1:[2.8,3.0,3.2,3.4,3.0,3.2],scope2:[14.9,15.2,16.8,17.2,18.3,16.7],total:90.8,intensity_kg_per_kg:2.74,projected_saving_tco2e:14.2},
-          scope2:{total_tco2e:100.1,emission_factor:0.716,ef_source:'CEA India 2023 — Western Regional Grid'},
-          scope1:{total_tco2e:18.6,sources:['Diesel generator','Furnace oil']},
+          scope2:{total_tco2e:100.1,emission_factor:0.716,ef_source:'approx., CEA-based (v18.0 / v19.0 grid benchmark, 0.716 kgCO₂/kWh)'},
+          scope1:{total_tco2e:18.6,sources:['Diesel generator (facility estimate)','Process fuel']},
           mv_table:[
-            {name:'Compressor idle control',baseline_kwh:2880,actual_kwh:1440,saving_kwh:1440,co2_avoided_t:1.03,saving_inr:8928,status:'verified'},
-            {name:'Furnace shift to off-peak',baseline_kwh:21400,actual_kwh:21400,saving_kwh:0,co2_avoided_t:0,saving_inr:10200,status:'verified'},
+            {name:'Compressor idle control',baseline_kwh:2880,actual_kwh:1440,saving_kwh:1440,co2_avoided_t:1.03,saving_inr:8928,status:'simulated'},
+            {name:'Furnace shift to off-peak',baseline_kwh:21400,actual_kwh:21400,saving_kwh:0,co2_avoided_t:0,saving_inr:10200,status:'simulated'},
             {name:'PF correction (target)',baseline_kwh:null,actual_kwh:null,saving_kwh:420,co2_avoided_t:0.30,saving_inr:1400,status:'projected'},
             {name:'Press #3 maintenance',baseline_kwh:null,actual_kwh:null,saving_kwh:380,co2_avoided_t:0.27,saving_inr:2356,status:'projected'},
           ],
           audit_trail:[
-            {action:'DISCOM data ingested',detail:'48,240 kWh · 30-min · Sep 2026'},
-            {action:'Scope 2 calculated',detail:'48,240 × 0.716 = 34.54 tCO₂e'},
-            {action:'Scope 1 — Diesel log',detail:'320L × 2.68 = 0.86 tCO₂e'},
-            {action:'M&V baseline trained',detail:'LightGBM R²=0.91 · Apr–Aug'},
-            {action:'Cryptographic signature',detail:'SHA-256: 3ce423485e084eb1...4fd437d0 · Verified payload digest'},
+            {action:'Interval data ingested',detail:'30-min interval telemetry registered'},
+            {action:'Scope 2 calculated',detail:'Total kWh × 0.716 kgCO₂/kWh ÷ 1000'},
+            {action:'Scope 1 — Diesel benchmark',detail:'Facility estimate: 18.6 tCO₂e'},
+            {action:'M&V baseline simulation',detail:'Physics-informed regression baseline'},
+            {action:'Payload Hash (Audit Trail)',detail:'SHA-256 verifiable payload digest'},
           ],
-          buyer_readiness:{scope2_location_based:true,scope1_direct:true,ghg_protocol_aligned:true,emission_intensity_metric:true,machine_readable_api:true}
+          buyer_readiness:{scope2_location_based:true,scope1_direct:true,ghg_protocol_aligned:true,emission_intensity_metric:true,machine_readable_api:true,third_party_verified:false,note:'Phase 1 prototype — internal audit trail registered'}
         })
         setIntensity({months:['Apr','May','Jun','Jul','Aug','Sep'],intensity:[2.48,2.52,2.61,2.68,2.71,2.74],target_intensity:2.45,unit:'kgCO2e per kg'})
       })
@@ -113,7 +123,7 @@ export default function Carbon() {
           <div className="carbon-kpi-card" style={{'--accent':'var(--green)'}}>
             <div className="ckpi-icon">♻️</div>
             <div className="ckpi-val">{totalAvoided.toFixed(2)}</div>
-            <div className="ckpi-label">tCO₂e Avoided (Verified)</div>
+            <div className="ckpi-label">tCO₂e Avoided (Simulated)</div>
             <div className="ckpi-sub">Projected: {combined.projected_saving_tco2e} tCO₂e/year</div>
           </div>
           <div className="carbon-kpi-card" style={{'--accent':'var(--blue-light)'}}>
@@ -193,18 +203,23 @@ export default function Carbon() {
           <div className="carbon-right">
             {/* Buyer Readiness */}
             <div className="chart-card" style={{marginBottom:16}}>
-              <div className="chart-title" style={{marginBottom:14}}>🌐 Buyer/CBAM Readiness</div>
+              <div className="chart-title" style={{marginBottom:14}}>🌐 Buyer / CBAM Readiness</div>
               <div style={{display:'flex',flexDirection:'column',gap:10}}>
-                {Object.entries(buyer_readiness).map(([k,v]) => (
+                {Object.entries(buyer_readiness).filter(([k]) => k !== 'note').map(([k,v]) => (
                   <div key={k} style={{display:'flex',alignItems:'center',justifyContent:'space-between',fontSize:13}}>
-                    <span style={{color:'var(--text2)'}}>{k.replace(/_/g,' ')}</span>
-                    <span>{v ? <span style={{color:'var(--green)'}}>✅</span> : <span style={{color:'var(--red)'}}>✗</span>}</span>
+                    <span style={{color:'var(--text2)'}}>{BUYER_LABELS[k] || k.replace(/_/g,' ')}</span>
+                    <span>{v ? <span style={{color:'var(--green)'}}>✅ Ready</span> : <span style={{color:'var(--red)'}}>✗ External Audit Needed</span>}</span>
                   </div>
                 ))}
               </div>
-              <div className="buyer-score">
-                <div className="buyer-score-val">4 / 5</div>
-                <div className="buyer-score-label">Buyer Readiness Score</div>
+              {buyer_readiness.note && (
+                <p style={{fontSize:11,color:'var(--text3)',marginTop:10,borderTop:'1px solid rgba(255,255,255,0.06)',paddingTop:8}}>
+                  ℹ️ {buyer_readiness.note}
+                </p>
+              )}
+              <div className="buyer-score" style={{marginTop:12}}>
+                <div className="buyer-score-val">5 / 6</div>
+                <div className="buyer-score-label">Buyer Readiness Criteria Met</div>
               </div>
             </div>
 

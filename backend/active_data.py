@@ -36,6 +36,7 @@ class ActivePlantData:
         self.total_kwh = float(SEP_TOTAL_KWH)
         self.total_bill_inr = float(SEP_TOTAL_AMOUNT_INR)
         self.avg_pf = float(SEP_AVG_PF)
+        self.pf_penalty_inr = float(SEP_PF_PENALTY_INR)
         self.production_kg = 12580.0
         self.specific_energy = float(SEP_SEC_ENERGY)
         self.deviation_pct = float(SEP_DEVIATION_PCT)
@@ -69,7 +70,13 @@ class ActivePlantData:
         self.machines = {m: round(k * factor, 1) for m, k in MACHINE_KWH.items()}
 
     def ingest_csv(self, file_bytes: bytes, filename: str) -> Dict[str, Any]:
-        """Parse uploaded interval CSV and compute real analytical metrics."""
+        """Parse uploaded interval CSV or PDF interval data and compute real analytical metrics."""
+        lower_fn = filename.lower()
+
+        # Handle PDF interval data (key-value summary format)
+        if lower_fn.endswith(".pdf"):
+            return self._ingest_interval_pdf(file_bytes, filename)
+
         try:
             df = pd.read_csv(io.BytesIO(file_bytes))
         except Exception as e:
@@ -146,6 +153,108 @@ class ActivePlantData:
             "message": f"Successfully parsed {len(df)} interval rows from {filename}. Live dashboard updated.",
         }
 
+    def _ingest_interval_pdf(self, file_bytes: bytes, filename: str) -> Dict[str, Any]:
+        """Parse interval data PDF (key-value summary format like the dummy PDFs)."""
+        import re
+        import fitz
+        try:
+            text_chunks = []
+            with fitz.open(stream=file_bytes, filetype="pdf") as doc:
+                for page in doc:
+                    text_chunks.append(page.get_text())
+            text = "\n".join(text_chunks)
+        except Exception as e:
+            return {"success": False, "mode": "demo_values_used", "reason": f"PDF read error: {e}"}
+
+        # Build key-value map — try two-column first, then alternating lines
+        kv_map = {}
+        for line in text.splitlines():
+            parts = re.split(r'\t|  +', line.strip())
+            if len(parts) >= 2:
+                key = parts[0].strip().lower()
+                val = parts[-1].strip()
+                if key and val and key != val.lower():
+                    kv_map[key] = val
+
+        # Fallback: alternating-line format (PyMuPDF output)
+        if not kv_map:
+            known_field_names = {
+                "consumer id", "meter id", "date", "interval",
+                "00:00 load", "06:00 load", "09:00 load", "12:00 load",
+                "15:00 load", "18:00 load", "21:00 load", "daily energy",
+                "field", "dummy value"
+            }
+            clean_lines = [l.strip() for l in text.splitlines() if l.strip()]
+            i = 0
+            while i < len(clean_lines) - 1:
+                key_candidate = clean_lines[i].lower()
+                val_candidate = clean_lines[i + 1]
+                if key_candidate in known_field_names:
+                    kv_map[key_candidate] = val_candidate
+                    i += 2
+                else:
+                    i += 1
+
+        # Detect if it's an interval-data PDF
+        interval_keys = {"daily energy", "interval", "meter id", "consumer id"}
+        if not set(kv_map.keys()).intersection(interval_keys):
+            return {"success": False, "mode": "demo_values_used", "reason": "Not recognized as interval data PDF."}
+
+        # Extract daily energy
+        daily_kwh = 0.0
+        for k in ["daily energy", "total daily energy", "energy (kwh)", "total kwh"]:
+            if k in kv_map:
+                nums = re.findall(r'[\d,]+(?:\.\d+)?', kv_map[k])
+                if nums:
+                    daily_kwh = float(nums[0].replace(',', ''))
+                break
+
+        # Extract peak load (maximum of the load readings)
+        load_values = []
+        for k, v in kv_map.items():
+            if 'load' in k and ':' in k:
+                nums = re.findall(r'[\d.]+', v)
+                if nums:
+                    load_values.append(float(nums[0]))
+
+        peak_kw = max(load_values) if load_values else (daily_kwh / 16)  # assume 16h operating
+
+        if daily_kwh > 0:
+            if self.source == "user_uploaded_bill_ocr" and self.total_kwh > 0:
+                # Retain verified monthly bill figure; sync peak load from interval measurements
+                self.peak_kw = round(peak_kw, 1)
+                return {
+                    "success": True,
+                    "mode": "interval_pdf_parsed",
+                    "daily_kwh": daily_kwh,
+                    "monthly_kwh_estimated": self.total_kwh,
+                    "peak_kw": self.peak_kw,
+                    "message": f"Interval data parsed: {daily_kwh:,.0f} kWh/day, peak {self.peak_kw} kW. Monthly bill ({self.total_kwh:,.0f} kWh) retained as source of truth.",
+                    "note": "15-minute load profile synced with active monthly bill.",
+                }
+
+            # Extrapolate to 26 working days (note: this is one day's data)
+            monthly_kwh = round(daily_kwh * 26, 1)
+            self.source = "user_uploaded_interval_pdf"
+            self.filename = filename
+            self.total_kwh = monthly_kwh
+            self.total_bill_inr = round(monthly_kwh * 6.08, 0)
+            self.peak_kw = round(peak_kw, 1)
+            self.specific_energy = round(self.total_kwh / max(1.0, self.production_kg), 3)
+            self.deviation_pct = round((self.specific_energy - BASELINE_SEC_ENERGY) / BASELINE_SEC_ENERGY * 100, 1)
+            self.recalculate_machine_energy()
+            return {
+                "success": True,
+                "mode": "interval_pdf_parsed",
+                "daily_kwh": daily_kwh,
+                "monthly_kwh_estimated": monthly_kwh,
+                "peak_kw": self.peak_kw,
+                "message": f"Interval PDF parsed: {daily_kwh} kWh/day -> {monthly_kwh} kWh/month estimated (26 working days). Live dashboard updated.",
+                "note": "This is a single-day snapshot. Monthly figure is an estimate.",
+            }
+
+        return {"success": False, "mode": "demo_values_used", "reason": "Could not extract daily energy from interval PDF."}
+
     def ingest_bill(self, extracted: dict, filename: str) -> Dict[str, Any]:
         """Update active plant state using metrics extracted from an electricity bill."""
         from bill_ocr import validate_bill_telemetry
@@ -168,7 +277,6 @@ class ActivePlantData:
         if extracted.get("consumer_name"):
             self.plant_name = extracted["consumer_name"]
         elif not self.plant_name or self.plant_name == PLANT_NAME:
-            # Derive clean company name from filename if consumer_name was omitted
             clean_name = filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ").title()
             if len(clean_name) > 3 and not clean_name.lower().startswith("bill"):
                 self.plant_name = f"{clean_name} Plant"
@@ -177,6 +285,13 @@ class ActivePlantData:
             self.discom = extracted["discom"]
         if extracted.get("month"):
             self.billing_period = extracted["month"]
+
+        # Store pf_penalty from bill if present, else calculate
+        if "pf_penalty_inr" in extracted:
+            self.pf_penalty_inr = round(float(extracted["pf_penalty_inr"]), 0)
+        else:
+            # PF < 0.90 typically triggers penalty; use ToD charges as proxy if available
+            self.pf_penalty_inr = round(self.pf_penalty_inr if hasattr(self, 'pf_penalty_inr') else 0.0, 0)
 
         self.source = "user_uploaded_bill_ocr"
         self.filename = filename
@@ -231,19 +346,32 @@ class ActivePlantData:
         """Parse production log (PDF, CSV, Excel, Text) and dynamically recalculate Specific Energy Consumption (SEC)."""
         res = process_production_file(file_bytes, filename)
         if res.get("success") and res.get("total_production_kg", 0) > 0:
-            self.production_kg = res["total_production_kg"]
-            self.specific_energy = round(self.total_kwh / max(1.0, self.production_kg), 3)
+            days = res.get("days_detected", 30)
+            raw_prod = res["total_production_kg"]
+            epu = res.get("energy_per_unit", 0.0)
+
+            if days == 1 and epu > 0:
+                # Extrapolate monthly units matching the logged specific energy
+                self.production_kg = round(self.total_kwh / max(0.01, epu), 1)
+                self.specific_energy = epu
+            elif days == 1:
+                self.production_kg = round(raw_prod * 26, 1)
+                self.specific_energy = round(self.total_kwh / max(1.0, self.production_kg), 3)
+            else:
+                self.production_kg = round(raw_prod, 1)
+                self.specific_energy = round(self.total_kwh / max(1.0, self.production_kg), 3)
+
             self.deviation_pct = round((self.specific_energy - BASELINE_SEC_ENERGY) / BASELINE_SEC_ENERGY * 100, 1)
             return {
                 "success": True,
                 "status": "processed",
                 "mode": "production_parsed",
                 "file": filename,
-                "days_detected": res["days_detected"],
+                "days_detected": days,
                 "total_production_kg": self.production_kg,
                 "specific_energy": self.specific_energy,
                 "deviation_pct": self.deviation_pct,
-                "message": f"✅ Parsed {self.production_kg:,.0f} kg production output from {filename}. Specific Energy updated to {self.specific_energy} kWh/kg!",
+                "message": f"Successfully parsed {raw_prod:,.0f} units output from {filename}. Specific Energy updated to {self.specific_energy} kWh/unit!",
             }
         return {
             "success": False,

@@ -52,8 +52,8 @@ def get_kpis() -> Dict[str, Any]:
         "baseline_specific_energy": BASELINE_SEC_ENERGY,
         "deviation_pct": dev_pct,
         "power_factor": avg_pf,
-        "pf_penalty_inr": SEP_PF_PENALTY_INR if avg_pf < 0.90 else 0,
-        "contract_demand_kva": CONTRACT_KVA,
+        "pf_penalty_inr": round(active_plant.pf_penalty_inr, 0) if avg_pf < 0.90 else 0,
+        "contract_demand_kva": round(active_plant.peak_kw / max(0.01, active_plant.avg_pf), 1) if active_plant.peak_kw > 0 else CONTRACT_KVA,
         "production_kg": active_plant.production_kg,
         "machines_count": len(active_plant.machines),
         "machines": list(active_plant.machines.keys()),
@@ -64,48 +64,62 @@ def get_kpis() -> Dict[str, Any]:
 def get_alerts() -> Dict[str, Any]:
     """Fetch detected operational anomalies matching active equipment."""
     machines_list = list(active_plant.machines.keys())
-    compressor_m = next((m for m in machines_list if "compressor" in m.lower()), "Air Compressor (75 kW)")
-    press_m = next((m for m in machines_list if "press" in m.lower() or "motor" in m.lower() or "lathe" in m.lower() or "cnc" in m.lower() or "furnace" in m.lower()), "Hydraulic Press #3")
+    compressor_m = next((m for m in machines_list if "compressor" in m.lower()), machines_list[0] if machines_list else "Primary Machine")
+    press_m = next((m for m in machines_list if "press" in m.lower() or "motor" in m.lower() or "lathe" in m.lower() or "cnc" in m.lower() or "furnace" in m.lower()), machines_list[1] if len(machines_list) > 1 else "Secondary Machine")
 
     scale = active_plant.total_kwh / max(1.0, float(SEP_TOTAL_KWH))
     comp_save = round(ANOMALY_SAVING_COMPRESSOR_INR * scale, 0)
     press_save = round(ANOMALY_SAVING_PRESS3_INR * scale, 0)
-    pf_save = round(ANOMALY_SAVING_PF_INR * scale, 0) if active_plant.avg_pf < 0.90 else 0
+    pf_save = round(active_plant.pf_penalty_inr if hasattr(active_plant, 'pf_penalty_inr') else ANOMALY_SAVING_PF_INR * scale, 0) if active_plant.avg_pf < 0.90 else 0
     tot_save = comp_save + press_save + pf_save
+
+    alerts = [
+        {
+            "machine": compressor_m,
+            "type": "idle_waste",
+            "severity": "high",
+            "waste_kwh": round(370 * scale, 0),
+            "saving_inr_month": comp_save,
+            "finding": f"Idle draw during non-production hours detected on {compressor_m}",
+            "action": "Install timer relay or auto-shutoff switch (one-time ~Rs. 2,000)",
+        },
+        {
+            "machine": press_m,
+            "type": "mechanical_wear",
+            "severity": "medium",
+            "waste_kwh": round(380 * scale, 0),
+            "saving_inr_month": press_save,
+            "finding": f"Specific energy creep on {press_m} indicating mechanical wear / lubrication need",
+            "action": "Schedule motor bearing inspection & re-greasing (~Rs. 3,500)",
+        },
+    ]
+
+    if active_plant.avg_pf < 0.90:
+        alerts.append({
+            "machine": "Capacitor Bank / Power Factor",
+            "type": "pf_penalty",
+            "severity": "low",
+            "waste_kwh": 0,
+            "saving_inr_month": pf_save,
+            "finding": f"Operating at {active_plant.avg_pf} PF (target >= 0.90) incurring APFC penalty",
+            "action": "APFC relay calibration & capacitor step replacement (~Rs. 10,000)",
+        })
+    else:
+        alerts.append({
+            "machine": "Capacitor Bank / Power Factor",
+            "type": "pf_healthy",
+            "severity": "low",
+            "waste_kwh": 0,
+            "saving_inr_month": 0,
+            "finding": f"Operating at {active_plant.avg_pf} PF (healthy APFC, no penalty)",
+            "action": "Maintain current capacitor bank operational state",
+        })
 
     return {
         "plant": active_plant.plant_name,
-        "total_alerts": 3,
+        "total_alerts": len(alerts),
         "total_potential_saving_inr": tot_save,
-        "alerts": [
-            {
-                "machine": compressor_m,
-                "type": "idle_waste",
-                "severity": "high",
-                "waste_kwh": round(370 * scale, 0),
-                "saving_inr_month": comp_save,
-                "finding": f"Idle draw during non-production hours detected on {compressor_m}",
-                "action": "Install timer relay or auto-shutoff switch (one-time ~Rs. 2,000)",
-            },
-            {
-                "machine": press_m,
-                "type": "mechanical_wear",
-                "severity": "medium",
-                "waste_kwh": round(380 * scale, 0),
-                "saving_inr_month": press_save,
-                "finding": f"Specific energy creep on {press_m} indicating mechanical wear / lubrication need",
-                "action": "Schedule motor bearing inspection & re-greasing (~Rs. 3,500)",
-            },
-            {
-                "machine": "Capacitor Bank / Power Factor",
-                "type": "pf_penalty",
-                "severity": "low",
-                "waste_kwh": 0,
-                "saving_inr_month": pf_save,
-                "finding": f"Operating at {active_plant.avg_pf} PF (target >= 0.90) incurring penalty",
-                "action": "APFC relay calibration & capacitor step replacement (~Rs. 10,000)",
-            },
-        ],
+        "alerts": alerts,
         "non_overlap_note": "Tariff shifts are handled in the Scheduler module to prevent double counting.",
     }
 
@@ -145,11 +159,11 @@ def get_carbon() -> Dict[str, Any]:
     current_kwh = active_plant.total_kwh
     scope2_tco2e = round(current_kwh * CEA_EMISSION_FACTOR_KG_PER_KWH / 1000, 2)
     total_tco2e = round(scope2_tco2e + SEP_SCOPE1_TCO2E, 2)
-    intensity = round(total_tco2e * 1000 / max(1.0, SEP_PRODUCTION_KG), 3)
+    intensity = round(total_tco2e * 1000 / max(1.0, active_plant.production_kg), 3)
 
     audit_data = {
-        "plant": PLANT_NAME,
-        "period": REPORT_PERIOD,
+        "plant": active_plant.plant_name,
+        "period": active_plant.billing_period,
         "kwh": current_kwh,
         "emission_factor": CEA_EMISSION_FACTOR_KG_PER_KWH,
         "scope1_tco2e": SEP_SCOPE1_TCO2E,
@@ -158,8 +172,8 @@ def get_carbon() -> Dict[str, Any]:
     }
     report_sha256 = hashlib.sha256(json.dumps(audit_data, sort_keys=True).encode()).hexdigest()
     return {
-        "plant": PLANT_NAME,
-        "period": "Sep 2026",
+        "plant": active_plant.plant_name,
+        "period": active_plant.billing_period,
         "scope2_tco2e": scope2_tco2e,
         "scope1_tco2e": SEP_SCOPE1_TCO2E,
         "total_tco2e": total_tco2e,
@@ -167,7 +181,7 @@ def get_carbon() -> Dict[str, Any]:
         "emission_factor": f"{CEA_EMISSION_FACTOR_KG_PER_KWH} kgCO2e/kWh",
         "emission_factor_source": EF_SOURCE,
         "audit_digest_sha256": report_sha256,
-        "verified_formula": f"{int(current_kwh):,} kWh × {CEA_EMISSION_FACTOR_KG_PER_KWH} kg/kWh ÷ 1000 = {scope2_tco2e} tCO₂e",
+        "verified_formula": f"{int(current_kwh):,} kWh * {CEA_EMISSION_FACTOR_KG_PER_KWH} kg/kWh / 1000 = {scope2_tco2e} tCO2e",
     }
 
 

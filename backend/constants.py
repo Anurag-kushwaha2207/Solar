@@ -26,7 +26,7 @@ REPORT_PERIOD  = "Apr 2026 – Sep 2026"
 # Table 1: Weighted Average Emission Factor (incl. renewable energy sources, net generation): 0.716 kg CO2/kWh.
 CEA_EMISSION_FACTOR_KG_PER_KWH = 0.716
 GRID_REGION    = "Indian National Grid (Western Region / Gujarat)"
-EF_SOURCE      = "CEA CO2 Baseline Database v18.0/v19.0 Table 1 (0.716 kgCO2e/kWh net)"
+EF_SOURCE      = "approx., CEA-based (v18.0/v19.0 grid benchmark, 0.716 kgCO2e/kWh)"
 DIESEL_EF_KG_PER_LITRE = 2.68   # IPCC Tier 1
 
 
