@@ -402,15 +402,15 @@ def _fallback_tool_router(query: str) -> Dict[str, Any]:
             status_pf = (
                 f"⚠️ **Low Power Factor ({data['power_factor']})**\n\n"
                 f"Aapka average PF **{data['power_factor']}** DISCOM limit (0.90) se kam hai.\n"
-                f"Active penalty: **₹{data['pf_penalty_inr']:,}/month**."
+                f"Active penalty: **₹{int(data['pf_penalty_inr']):,}/month**."
             )
         return {
             "content": (
                 f"📊 **Power Factor Analysis — {active_plant.plant_name}**\n\n"
                 f"• Average Measured PF: **{data['power_factor']}**\n"
-                f"• APFC Penalty: **₹{data['pf_penalty_inr']:,}**\n\n"
+                f"• APFC Penalty: **₹{int(data['pf_penalty_inr']):,}**\n\n"
                 f"{status_pf}\n\n"
-                f"Monthly Energy: **{data['total_kwh']:,} kWh** | Bill: **₹{data['total_bill_inr']:,}**"
+                f"Monthly Energy: **{int(data['total_kwh']):,} kWh** | Bill: **₹{int(data['total_bill_inr']):,}**"
             ),
             "tool_called": "get_kpis",
             "tool_result": data,
@@ -438,14 +438,15 @@ def _fallback_tool_router(query: str) -> Dict[str, Any]:
                 f"💡 Scheduler tab mein CP-SAT optimizer run karke ₹21,600/month (12.2% of bill) bachaye ja sakte hain!"
             )
 
+        pf_status_str = "✅ Healthy PF, No penalty" if data['power_factor'] >= 0.90 else f"⚠️ Penalty ₹{int(data['pf_penalty_inr']):,}"
         return {
             "content": (
                 f"📈 **Consumption & Bill Analysis — {active_plant.plant_name}**\n\n"
                 f"• Data Source: **{data['data_source']}** ({active_plant.filename})\n"
-                f"• Total Consumption: **{data['total_kwh']:,} kWh**\n"
-                f"• Total Electricity Bill: **₹{data['total_bill_inr']:,}** (Blended: ₹{data['blended_rate_inr_per_kwh']}/kWh)\n"
+                f"• Total Consumption: **{int(data['total_kwh']):,} kWh**\n"
+                f"• Total Electricity Bill: **₹{int(data['total_bill_inr']):,}** (Blended: ₹{data['blended_rate_inr_per_kwh']}/kWh)\n"
                 f"• Specific Energy: **{data['specific_energy_kwh_per_kg']} {sec_unit}**\n"
-                f"• Power Factor: **{data['power_factor']}** ({'✅ Healthy PF, No penalty' if data['power_factor'] >= 0.90 else f'⚠️ Penalty ₹{data['pf_penalty_inr']:,}'})\n\n"
+                f"• Power Factor: **{data['power_factor']}** ({pf_status_str})\n\n"
                 f"{drivers}\n\n"
                 f"👉 Type 'anomalies' for machine-level alerts or 'scheduler' to view CP-SAT ToD shift savings."
             ),
