@@ -44,18 +44,18 @@ const appId = import.meta.env.VITE_FIREBASE_APP_ID || ''
 export const isFirebaseConfigured = Boolean(
   apiKey &&
   projectId &&
-  projectId !== 'urjamind-energy' &&
+  projectId !== 'unconfigured' &&
   !apiKey.includes('Placeholder') &&
   !apiKey.includes('DemoKey')
 )
 
 const firebaseConfig = {
-  apiKey: isFirebaseConfigured ? apiKey : 'AIzaSy_UNCONFIGURED_KEY',
-  authDomain: isFirebaseConfigured ? authDomain : 'unconfigured.firebaseapp.com',
-  projectId: isFirebaseConfigured ? projectId : 'unconfigured',
-  storageBucket: isFirebaseConfigured ? storageBucket : 'unconfigured.appspot.com',
-  messagingSenderId: messagingSenderId || '000000000000',
-  appId: appId || '1:000000000000:web:000000000000',
+  apiKey: apiKey || 'AIzaSy_UNCONFIGURED_KEY',
+  authDomain: authDomain || 'urjamind-energy.firebaseapp.com',
+  projectId: projectId || 'urjamind-energy',
+  storageBucket: storageBucket || 'urjamind-energy.firebasestorage.app',
+  messagingSenderId: messagingSenderId || '724779527706',
+  appId: appId || '1:724779527706:web:c11a02d6bc088feb6a6ba3',
 }
 
 // Initialize Firebase safely

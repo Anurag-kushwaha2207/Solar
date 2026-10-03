@@ -98,8 +98,15 @@ function Copilot({ kpis }) {
       setMsgs(m => [...m, {role:'bot', content:res.content}])
       // Log to Firestore in background
       logCopilotChat('plant_1', text, res.content, res.tool_called)
-    } catch {
-      setMsgs(m => [...m, {role:'bot', content:'Connection error — backend chal raha hai? `cd backend && python -m uvicorn main:app --reload --port 8000`'}])
+    } catch (err) {
+      if (err?.response?.status === 401) {
+        setMsgs(m => [...m, {
+          role:'bot',
+          content:'🔒 **Login Required:** Cloud security ke tahat Copilot use karne ke liye kripya upar right corner mein **"🔥 Firebase Login"** par click karke sign in karein!'
+        }])
+      } else {
+        setMsgs(m => [...m, {role:'bot', content:'Connection error — backend chal raha hai? `cd backend && python -m uvicorn main:app --reload --port 8000`'}])
+      }
     } finally { setLoading(false) }
   }
 
