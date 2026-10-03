@@ -12,7 +12,7 @@ from active_data import active_plant
 router = APIRouter()
 
 
-from bill_ocr import process_uploaded_bill
+from bill_ocr import process_uploaded_bill, validate_bill_telemetry
 
 
 @router.post("/upload-bill")
@@ -20,14 +20,69 @@ async def upload_bill(file: UploadFile = File(...), plant_id: str = Form("1")):
     """
     Bill upload endpoint.
     Extracts consumption, demand, PF, and payable amount from digital PDF or text bills via PyMuPDF.
-    Updates the active plant analytics state when recognized.
+    Validates metrics against physical sanity rules before updating active plant state.
     """
     content = await file.read()
     ocr_res = process_uploaded_bill(content, file.filename)
 
+    # 1. Check if extraction failed sanity checks (e.g. negative kWh, PF > 1.0)
+    if ocr_res.get("validation_failed"):
+        val_error = ocr_res.get("validation_error", "Sanity validation failed")
+        return {
+            "status": "demo_fallback",
+            "mode": "demo_values_used",
+            "validation_failed": True,
+            "file": file.filename,
+            "size_kb": round(len(content) / 1024, 1),
+            "ocr_engine": ocr_res.get("engine", "OCR Parser"),
+            "message": f"Bill metrics rejected by sanity check: {val_error} — demo baseline retained.",
+            "validation_error": val_error,
+            "raw_extracted": ocr_res.get("extracted_data", {}),
+            "extracted": {
+                "month": "Sep 2026",
+                "total_kwh": SEP_TOTAL_KWH,
+                "total_kvah": SEP_TOTAL_KVAH,
+                "max_demand_kva": SEP_MAX_DEMAND_KVA,
+                "power_factor": SEP_AVG_PF,
+                "tod_peak_kwh": SEP_TOD_PEAK_KWH,
+                "tod_offpeak_kwh": SEP_TOD_OFFPEAK_KWH,
+                "total_amount_inr": SEP_TOTAL_AMOUNT_INR,
+                "pf_penalty_inr": SEP_PF_PENALTY_INR,
+            },
+            "data_tier": 1,
+        }
+
+    # 2. If valid metrics were extracted and passed sanity checks
     if ocr_res.get("success"):
         extracted = ocr_res["extracted_data"]
-        # Update live plant state with extracted values
+        # Double-check sanity
+        is_valid, val_error = validate_bill_telemetry(extracted)
+        if not is_valid:
+            return {
+                "status": "demo_fallback",
+                "mode": "demo_values_used",
+                "validation_failed": True,
+                "file": file.filename,
+                "size_kb": round(len(content) / 1024, 1),
+                "ocr_engine": ocr_res.get("engine", "OCR Parser"),
+                "message": f"Bill metrics rejected by sanity check: {val_error} — demo baseline retained.",
+                "validation_error": val_error,
+                "raw_extracted": extracted,
+                "extracted": {
+                    "month": "Sep 2026",
+                    "total_kwh": SEP_TOTAL_KWH,
+                    "total_kvah": SEP_TOTAL_KVAH,
+                    "max_demand_kva": SEP_MAX_DEMAND_KVA,
+                    "power_factor": SEP_AVG_PF,
+                    "tod_peak_kwh": SEP_TOD_PEAK_KWH,
+                    "tod_offpeak_kwh": SEP_TOD_OFFPEAK_KWH,
+                    "total_amount_inr": SEP_TOTAL_AMOUNT_INR,
+                    "pf_penalty_inr": SEP_PF_PENALTY_INR,
+                },
+                "data_tier": 1,
+            }
+
+        # Update live plant state with validated extracted values
         update_info = active_plant.ingest_bill(extracted, file.filename)
         return {
             "status": "processed",
@@ -37,6 +92,14 @@ async def upload_bill(file: UploadFile = File(...), plant_id: str = Form("1")):
             "ocr_engine": ocr_res["engine"],
             "message": f"Bill successfully parsed via {ocr_res['engine']}! Live analytics updated.",
             "extracted": extracted,
+            "requires_confirmation": True,
+            "confirmation_fields": {
+                "total_kwh": extracted.get("total_kwh"),
+                "total_amount_inr": extracted.get("total_amount_inr"),
+                "power_factor": extracted.get("power_factor"),
+                "max_demand_kva": extracted.get("max_demand_kva"),
+                "discom": extracted.get("discom", "DISCOM"),
+            },
             "data_tier": 1,
             "active_state": {
                 "total_kwh": active_plant.total_kwh,
@@ -65,6 +128,43 @@ async def upload_bill(file: UploadFile = File(...), plant_id: str = Form("1")):
             "pf_penalty_inr": SEP_PF_PENALTY_INR,
         },
         "data_tier": 1,
+    }
+
+
+@router.post("/confirm-bill")
+async def confirm_bill(payload: dict):
+    """
+    User verification and confirmation endpoint for bill OCR metrics.
+    Allows factory operators to review and confirm or correct extracted values.
+    Validates updated values before committing to active plant state.
+    """
+    extracted = {
+        "total_kwh": payload.get("total_kwh"),
+        "total_amount_inr": payload.get("total_amount_inr"),
+        "power_factor": payload.get("power_factor"),
+        "max_demand_kva": payload.get("max_demand_kva"),
+        "discom": payload.get("discom", "DISCOM"),
+    }
+    extracted = {k: v for k, v in extracted.items() if v is not None}
+    is_valid, reason = validate_bill_telemetry(extracted)
+    if not is_valid:
+        return {
+            "status": "demo_fallback",
+            "validation_failed": True,
+            "message": f"Sanity check failed: {reason}",
+            "error": reason,
+        }
+
+    active_plant.ingest_bill(extracted, payload.get("filename", "user_verified_bill"))
+    return {
+        "status": "confirmed",
+        "message": "✅ Bill metrics successfully confirmed! Live dashboard updated.",
+        "active_state": {
+            "total_kwh": active_plant.total_kwh,
+            "total_bill_inr": active_plant.total_bill_inr,
+            "power_factor": active_plant.avg_pf,
+            "peak_kw": active_plant.peak_kw,
+        }
     }
 
 

@@ -15,17 +15,19 @@ UrjaMind helps Indian SMEs reduce industrial electricity bills and ToD peak surc
 
 ---
 
-## 🔍 Ground Reality & What Works Today (Phase 1 vs Phase 2)
+## 🔍 Ground Reality & What Works Today (Phase 1 Prototype vs Phase 2 Roadmap)
 
 | Component | Status in Repo | Implementation Reality & Transparency |
 |---|---|---|
 | **Tariff Scheduler** | ✅ **REAL** | Google OR-Tools 9.x CP-SAT solver. Finds global optimal schedule in <0.3s respecting 250 kVA Max Demand. Monthly saving: **₹47,500/month (16.5%)**. |
-| **Comparative Heuristic** | ✅ **REAL** | Live Greedy benchmark solver running alongside CP-SAT. |
+| **Comparative Heuristic** | ✅ **REAL** | Live Greedy benchmark solver running independently alongside CP-SAT. |
 | **Carbon Accounting** | ✅ **REAL** | Verified CEA Western Grid emission factor (0.716 kgCO₂e/kWh), Scope 1 diesel logs, and cryptographically verified SHA-256 payload digest. |
-| **Data Ingestion** | ✅ Working | DISCOM interval CSV, bill uploads, production logs handled via FastAPI endpoints. |
-| **Machine NILM** | 🔬 Phase 1 | Physics-informed equipment register breakdown (sums strictly to 48,240 kWh). Seq2Point/Transformer training on IMDELD/HIPE is Phase 2. |
-| **Anomaly Detection** | 🔬 Phase 1 | Physics rules (e.g. 4.2 kW compressor idle draw during non-production night shifts) + real measured PF (0.870). LSTM-VAE is Phase 2. |
-| **Copilot** | 🔬 Phase 1 | Multi-tool agentic engine (answers are grounded in tool outputs, strictly executing verified analytical solvers). |
+| **Data Ingestion & OCR** | ✅ **REAL** | Digital PDF parser (PyMuPDF) + Scanned Bill Photo OCR (Claude Vision) with strict physical sanity bounds (`kWh > 0`, `0.5 ≤ PF ≤ 1.0`, `amount > 0`) and user confirmation UI. |
+| **Security & Auth** | ✅ **REAL** | Firebase Auth token verification, production token locking (401 for demo tokens in `ENVIRONMENT=production`), Twilio/Meta HMAC-SHA256 signature verification, dynamic CORS. |
+| **Machine NILM** | 🔬 Phase 1 | Physics-informed equipment register breakdown (sums strictly to 48,240 kWh). Neural Seq2Point/Transformer training on real IMDELD/HIPE datasets is Phase 2 (post-Oct 11). |
+| **Anomaly Detection** | 🔬 Phase 1 | Physics rules (e.g. 4.2 kW compressor idle draw, low PF 0.870) totaling ₹12,400/month without double-counting. Deep LSTM-VAE is Phase 2. |
+| **Copilot** | 🔬 Phase 1 | Multi-tool agentic engine (grounded in tool outputs, strictly executing verified analytical solvers). |
+| **Digital Twin & Forecasting** | 🔬 Phase 2 | LightGBM baseline forecasting and digital twin models will be trained during the hackathon prototype phase (from Oct 11 onwards). |
 
 ---
 

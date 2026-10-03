@@ -275,6 +275,49 @@ def test_firebase_auth_user_isolation():
     assert r_kpis_b.json()["kpis"]["total_kwh"] == 48240
 
 
+def test_bill_ocr_sanity_rejection_and_confirmation():
+    """17. Bill OCR Sanity & User Confirmation: Rejects negative kWh & impossible PF, confirms valid readings."""
+    from bill_ocr import validate_bill_telemetry
+
+    # A. Sanity validator directly catches corrupted values
+    ok_neg, reason_neg = validate_bill_telemetry({"total_kwh": -5, "power_factor": 8.7})
+    assert ok_neg is False
+    assert "strictly positive" in reason_neg or "impossible" in reason_neg
+
+    ok_pf, reason_pf = validate_bill_telemetry({"total_kwh": 50000, "power_factor": 8.7})
+    assert ok_pf is False
+    assert "0.5 <= PF <= 1.0" in reason_pf
+
+    # B. active_plant.ingest_bill strictly rejects invalid payloads
+    res_bad = active_plant.ingest_bill({"total_kwh": -5, "power_factor": 8.7}, "bad_bill.jpg")
+    assert res_bad["success"] is False
+    assert res_bad["status"] == "demo_fallback"
+    assert active_plant.total_kwh == 48240.0, "Active plant data was polluted by invalid readings!"
+
+    # C. /api/ingest/confirm-bill rejects invalid numbers
+    post_bad = client.post("/api/ingest/confirm-bill", json={"total_kwh": -10, "power_factor": 1.5})
+    assert post_bad.status_code == 200
+    assert post_bad.json().get("validation_failed") is True
+
+    # D. /api/ingest/confirm-bill accepts valid numbers and updates live dashboard
+    post_ok = client.post("/api/ingest/confirm-bill", json={
+        "total_kwh": 35000.0,
+        "total_amount_inr": 215000.0,
+        "power_factor": 0.95,
+        "max_demand_kva": 180.0,
+        "discom": "PGVCL",
+        "filename": "verified_bill_sep2026.pdf"
+    })
+    assert post_ok.status_code == 200
+    assert post_ok.json()["status"] == "confirmed"
+    assert active_plant.total_kwh == 35000.0
+    assert active_plant.avg_pf == 0.95
+
+    # Check dashboard reflects confirmed numbers
+    kpi_r = client.get("/api/dashboard/kpis")
+    assert kpi_r.json()["kpis"]["total_kwh"] == 35000.0
+
+
 def run_tests():
     """Execute all tests programmatically."""
     tests = [
@@ -294,6 +337,7 @@ def run_tests():
         ("14. Claude Model & Tool Grounding", test_claude_model_and_grounded_note),
         ("15. Unauthenticated API Rejection (Logout 401)", test_unauthenticated_api_rejection_on_logout),
         ("16. Firebase Auth & Tenant Isolation", test_firebase_auth_user_isolation),
+        ("17. Bill OCR Sanity & User Confirmation", test_bill_ocr_sanity_rejection_and_confirmation),
     ]
 
     print("\nRunning UrjaMind Test & Verification Suite...")

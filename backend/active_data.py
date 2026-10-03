@@ -123,6 +123,18 @@ class ActivePlantData:
 
     def ingest_bill(self, extracted: dict, filename: str) -> Dict[str, Any]:
         """Update active plant state using metrics extracted from an electricity bill."""
+        # Sanity validation check: kWh > 0, 0.5 <= PF <= 1.0, amount > 0
+        from bill_ocr import validate_bill_telemetry
+        is_valid, reason = validate_bill_telemetry(extracted)
+        if not is_valid:
+            return {
+                "success": False,
+                "status": "demo_fallback",
+                "mode": "demo_values_used",
+                "reason": reason,
+                "message": f"Sanity check failed: {reason}. Demo baseline retained.",
+            }
+
         total_kwh = extracted.get("total_kwh", self.total_kwh)
         total_amount = extracted.get("total_amount_inr", self.total_bill_inr)
         avg_pf = extracted.get("power_factor", self.avg_pf)
@@ -143,6 +155,7 @@ class ActivePlantData:
 
         return {
             "success": True,
+            "status": "processed",
             "mode": "bill_ocr_parsed",
             "total_kwh": self.total_kwh,
             "total_bill_inr": self.total_bill_inr,

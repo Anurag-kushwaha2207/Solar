@@ -1,8 +1,17 @@
 import axios from 'axios'
 import { auth } from './firebase'
 
+const rawBaseUrl = import.meta.env.VITE_API_URL || '/api'
+const normalizedBaseUrl = rawBaseUrl.endsWith('/api')
+  ? rawBaseUrl
+  : rawBaseUrl.endsWith('/')
+  ? `${rawBaseUrl}api`
+  : rawBaseUrl === '' || rawBaseUrl === '/'
+  ? '/api'
+  : `${rawBaseUrl}/api`
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api',
+  baseURL: normalizedBaseUrl,
   headers: { 'Content-Type': 'application/json' },
 })
 
@@ -61,6 +70,7 @@ export const fetchQuickQs      = ()      => api.get('/copilot/quick-questions').
 // ── Ingestion ──────────────────────────────────────────────────────────────
 export const loadDemoData      = ()      => api.post('/ingest/load-demo').then(r => r.data)
 export const uploadBill        = (fd)    => api.post('/ingest/upload-bill', fd, { headers: { 'Content-Type': 'multipart/form-data' }}).then(r => r.data)
+export const confirmBill       = (body)  => api.post('/ingest/confirm-bill', body).then(r => r.data)
 export const uploadMeter       = (fd)    => api.post('/ingest/upload-meter-data', fd, { headers: { 'Content-Type': 'multipart/form-data' }}).then(r => r.data)
 export const uploadProduction  = (fd)    => api.post('/ingest/upload-production', fd, { headers: { 'Content-Type': 'multipart/form-data' }}).then(r => r.data)
 export const uploadEquipment   = (fd)    => api.post('/ingest/upload-equipment', fd, { headers: { 'Content-Type': 'multipart/form-data' }}).then(r => r.data)

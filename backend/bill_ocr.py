@@ -24,7 +24,7 @@ import logging
 import os
 import re
 import io
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 import fitz  # PyMuPDF
 
 logger = logging.getLogger("urjamind.bill_ocr")
@@ -203,6 +203,56 @@ def extract_bill_from_image_claude(
         return {}
 
 
+def validate_bill_telemetry(extracted: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+    """
+    Sanity validation for extracted electricity bill metrics.
+    Prevents hallucinated or corrupted OCR telemetry from contaminating analytics.
+    Rules:
+    - total_kwh > 0 and <= 50,000,000
+    - 0.5 <= power_factor <= 1.0 (if present)
+    - total_amount_inr > 0 (if present)
+    - max_demand_kva > 0 (if present)
+    """
+    if not extracted:
+        return False, "No data extracted from document"
+
+    if "total_kwh" in extracted:
+        try:
+            kwh = float(extracted["total_kwh"])
+            if kwh <= 0:
+                return False, f"Invalid total_kwh ({kwh}): Energy consumption must be strictly positive."
+            if kwh > 50_000_000:
+                return False, f"Unrealistic total_kwh ({kwh}): Exceeds industrial plant threshold."
+        except (ValueError, TypeError):
+            return False, f"Non-numeric total_kwh value: {extracted['total_kwh']}"
+
+    if "power_factor" in extracted:
+        try:
+            pf = float(extracted["power_factor"])
+            if pf < 0.5 or pf > 1.0:
+                return False, f"Physically impossible Power Factor ({pf}): Power factor must satisfy 0.5 <= PF <= 1.0."
+        except (ValueError, TypeError):
+            return False, f"Non-numeric power_factor value: {extracted['power_factor']}"
+
+    if "total_amount_inr" in extracted:
+        try:
+            amt = float(extracted["total_amount_inr"])
+            if amt <= 0:
+                return False, f"Invalid total_amount_inr ({amt}): Billed amount must be strictly positive."
+        except (ValueError, TypeError):
+            return False, f"Non-numeric total_amount_inr value: {extracted['total_amount_inr']}"
+
+    if "max_demand_kva" in extracted:
+        try:
+            md = float(extracted["max_demand_kva"])
+            if md <= 0:
+                return False, f"Invalid max_demand_kva ({md}): Maximum demand must be positive."
+        except (ValueError, TypeError):
+            return False, f"Non-numeric max_demand_kva value: {extracted['max_demand_kva']}"
+
+    return True, None
+
+
 def process_uploaded_bill(content_bytes: bytes, filename: str) -> Dict[str, Any]:
     """
     Main entry point for processing an uploaded electricity bill.
@@ -269,10 +319,25 @@ def process_uploaded_bill(content_bytes: bytes, filename: str) -> Dict[str, Any]
 
     has_kwh = "total_kwh" in extracted
     has_amount = "total_amount_inr" in extracted
-    success = bool(has_kwh or has_amount)
+    preliminary_success = bool(has_kwh or has_amount)
+
+    if preliminary_success:
+        is_valid, validation_error = validate_bill_telemetry(extracted)
+        if not is_valid:
+            return {
+                "success": False,
+                "validation_failed": True,
+                "validation_error": validation_error,
+                "error": validation_error,
+                "engine": engine_used,
+                "filename": filename,
+                "text_length": len(raw_text),
+                "extracted_data": extracted,
+                "snippet": raw_text[:300].strip() if raw_text else "",
+            }
 
     return {
-        "success": success,
+        "success": preliminary_success,
         "engine": engine_used,
         "filename": filename,
         "text_length": len(raw_text),
