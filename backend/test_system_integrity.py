@@ -317,6 +317,16 @@ def test_bill_ocr_sanity_rejection_and_confirmation():
     kpi_r = client.get("/api/dashboard/kpis")
     assert kpi_r.json()["kpis"]["total_kwh"] == 35000.0
 
+    # E. Confirm-pehle-ingest: upload_bill holds for confirmation without immediately altering dashboard
+    bill_content = b"DISCOM: PGVCL\nTotal Consumption : 42000 kWh\nNet Payable Rs: 260000\nAvg PF: 0.92\nMax Demand: 210 kVA\n"
+    up_r = client.post("/api/ingest/upload-bill", files={"file": ("pgvcl_test_bill.txt", bill_content, "text/plain")})
+    assert up_r.status_code == 200
+    up_data = up_r.json()
+    assert up_data["status"] == "requires_confirmation"
+    assert up_data["requires_confirmation"] is True
+    # The active plant data remains at 35000 (NOT 42000) until the user explicitly confirms!
+    assert active_plant.total_kwh == 35000.0
+
 
 def run_tests():
     """Execute all tests programmatically."""

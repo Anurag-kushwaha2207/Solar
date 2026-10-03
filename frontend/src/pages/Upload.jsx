@@ -36,6 +36,8 @@ function DropZone({ icon, title, desc, formats, required, onUpload, uploaded, id
 
       if (res?.validation_failed || res?.status === 'validation_failed') {
         toast.error(`⚠️ Sanity check failed: ${res.validation_error || res.message || 'Invalid readings'}. Demo baseline retained.`, { duration: 6000 })
+      } else if (res?.requires_confirmation) {
+        toast.success(`🔍 Bill parsed! Niche diye numbers verify karke confirm karein.`, { duration: 5000 })
       } else if (res?.mode === 'data_parsed' || res?.mode === 'bill_ocr_parsed') {
         toast.success(`✅ ${title} parsed (${res.rows_detected || 'bill metrics'} updated live analytics)!`)
       } else {

@@ -82,15 +82,14 @@ async def upload_bill(file: UploadFile = File(...), plant_id: str = Form("1")):
                 "data_tier": 1,
             }
 
-        # Update live plant state with validated extracted values
-        update_info = active_plant.ingest_bill(extracted, file.filename)
+        # Do not ingest immediately: require user review & confirmation before updating live state
         return {
-            "status": "processed",
-            "mode": "bill_ocr_parsed",
+            "status": "requires_confirmation",
+            "mode": "ocr_parsed_pending_confirmation",
             "file": file.filename,
             "size_kb": round(len(content) / 1024, 1),
             "ocr_engine": ocr_res["engine"],
-            "message": f"Bill successfully parsed via {ocr_res['engine']}! Live analytics updated.",
+            "message": f"Bill parsed via {ocr_res['engine']}. Please review and confirm numbers before updating live dashboard.",
             "extracted": extracted,
             "requires_confirmation": True,
             "confirmation_fields": {
