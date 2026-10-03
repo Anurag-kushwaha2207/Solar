@@ -1,0 +1,42 @@
+{
+  "status": "COMPLETED",
+  "dataset": "Synthetic Foundry Duty-Cycle Benchmark (Simulation of 14-day precision foundry, NOT real IMDELD dataset)",
+  "models_evaluated": "RandomForestRegressor with physical non-negative + sum-to-total constraints (Pure electrical features)",
+  "phase": "Phase 1 Prototype Simulation (Real IMDELD/HIPE training scheduled for Phase 2: Oct 11 - Nov 22)",
+  "ablation": [
+    {
+      "resolution": "1-min",
+      "data_interval": "1min",
+      "macro_r2": 0.92,
+      "macro_mae_kw": 1.53,
+      "furnace_r2": 0.989,
+      "compressor_r2": 0.922,
+      "press_r2": 0.897,
+      "fettling_r2": 0.95,
+      "samples_evaluated": 5760
+    },
+    {
+      "resolution": "15-min",
+      "data_interval": "15min",
+      "macro_r2": 0.994,
+      "macro_mae_kw": 0.2,
+      "furnace_r2": 1.0,
+      "compressor_r2": 0.998,
+      "press_r2": 0.999,
+      "fettling_r2": 0.999,
+      "samples_evaluated": 384
+    },
+    {
+      "resolution": "30-min",
+      "data_interval": "30min",
+      "macro_r2": 0.995,
+      "macro_mae_kw": 0.24,
+      "furnace_r2": 0.997,
+      "compressor_r2": 0.996,
+      "press_r2": 0.996,
+      "fettling_r2": 0.995,
+      "samples_evaluated": 192
+    }
+  ],
+  "conclusion": "Simulation benchmark evaluation: 1-min interval achieves macro R^2 = 0.92. At DISCOM standard 15-min interval, macro R^2 is 0.994 (Furnace R^2 = 1.0). Real ML training on IEEE DataPort IMDELD dataset begins Oct 11."
+}

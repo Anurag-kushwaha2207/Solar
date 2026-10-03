@@ -3,11 +3,17 @@ UrjaMind Backend — FastAPI Application
 AI Energy Intelligence Platform for Indian SMEs
 """
 import os
-from fastapi import FastAPI, Request
+from dotenv import load_dotenv
+
+# Load environment variables from .env file before importing routers
+load_dotenv()
+
+from fastapi import FastAPI, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from routers import ingestion, dashboard, nilm, anomaly, scheduler, carbon, copilot, auth, whatsapp
+from auth_middleware import get_current_user
 
 app = FastAPI(
     title="UrjaMind API",
@@ -35,13 +41,13 @@ app.add_middleware(
 
 # Routers
 app.include_router(auth.router,       prefix="/api/auth",      tags=["Authentication"])
-app.include_router(ingestion.router,  prefix="/api/ingest",    tags=["Data Ingestion"])
+app.include_router(ingestion.router,  prefix="/api/ingest",    tags=["Data Ingestion"], dependencies=[Depends(get_current_user)])
 app.include_router(dashboard.router,  prefix="/api/dashboard", tags=["Dashboard"])
 app.include_router(nilm.router,       prefix="/api/nilm",      tags=["NILM Disaggregation"])
 app.include_router(anomaly.router,    prefix="/api/anomaly",   tags=["Anomaly Detection"])
 app.include_router(scheduler.router,  prefix="/api/scheduler", tags=["Tariff Scheduler"])
 app.include_router(carbon.router,     prefix="/api/carbon",    tags=["Carbon Report"])
-app.include_router(copilot.router,    prefix="/api/copilot",   tags=["LLM Copilot"])
+app.include_router(copilot.router,    prefix="/api/copilot",   tags=["LLM Copilot"],    dependencies=[Depends(get_current_user)])
 app.include_router(whatsapp.router,   prefix="/api",           tags=["WhatsApp"])
 
 @app.get("/webhook")

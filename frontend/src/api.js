@@ -1,8 +1,31 @@
 import axios from 'axios'
+import { auth } from './firebase'
 
 const api = axios.create({
   baseURL: '/api',
   headers: { 'Content-Type': 'application/json' },
+})
+
+// Axios request interceptor: Attach Firebase ID Token (or local dev token)
+api.interceptors.request.use(async (config) => {
+  try {
+    const user = auth?.currentUser
+    if (user) {
+      const idToken = await user.getIdToken()
+      if (idToken) {
+        config.headers.Authorization = `Bearer ${idToken}`
+        return config
+      }
+    }
+    // Fallback: Use stored token or demo token for local development
+    const storedToken = localStorage.getItem('urjamind_token') || 'demo-token-urjamind-2026'
+    if (storedToken) {
+      config.headers.Authorization = `Bearer ${storedToken}`
+    }
+  } catch (err) {
+    console.warn('Axios authorization interceptor error:', err)
+  }
+  return config
 })
 
 // ── Dashboard ──────────────────────────────────────────────────────────────

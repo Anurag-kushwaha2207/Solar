@@ -30,10 +30,12 @@ logger = logging.getLogger("urjamind.whatsapp")
 router = APIRouter(prefix="/whatsapp", tags=["WhatsApp"])
 
 WHATSAPP_VERIFY_TOKEN = os.environ.get("WHATSAPP_VERIFY_TOKEN", "urjamind_token_2026")
-WHATSAPP_ACCESS_TOKEN = os.environ.get("WHATSAPP_ACCESS_TOKEN")
+WHATSAPP_ACCESS_TOKEN = os.environ.get("WHATSAPP_ACCESS_TOKEN") or os.environ.get("WHATSAPP_TOKEN")
 WHATSAPP_PHONE_ID = os.environ.get("WHATSAPP_PHONE_ID")
 META_APP_SECRET = os.environ.get("META_APP_SECRET")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN")
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+ENVIRONMENT = os.environ.get("ENVIRONMENT", "development").lower()
 
 
 def format_for_whatsapp(text: str) -> str:
@@ -117,14 +119,37 @@ async def receive_whatsapp_message(request: Request):
     content_type = request.headers.get("content-type", "")
     incoming_text = ""
     sender_number = "unknown"
+    is_meta_webhook = False
     is_twilio = "application/x-www-form-urlencoded" in content_type or bool(request.headers.get("x-twilio-signature"))
+
+    # Resolve dynamic environment configuration per request
+    env = os.environ.get("ENVIRONMENT", ENVIRONMENT).lower()
+    meta_secret = os.environ.get("META_APP_SECRET") or META_APP_SECRET
+    twilio_token = os.environ.get("TWILIO_AUTH_TOKEN") or TWILIO_AUTH_TOKEN
+    public_base_url = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/") or PUBLIC_BASE_URL
 
     # 1. Handle Twilio Sandbox (application/x-www-form-urlencoded)
     if is_twilio:
         form_data = await request.form()
         twilio_sig = request.headers.get("x-twilio-signature")
-        if TWILIO_AUTH_TOKEN:
-            url = str(request.url)
+        if env == "production" and not twilio_sig:
+            raise HTTPException(status_code=401, detail="X-Twilio-Signature required in production")
+
+        if twilio_token:
+            if not twilio_sig:
+                raise HTTPException(status_code=401, detail="X-Twilio-Signature required when TWILIO_AUTH_TOKEN is configured")
+
+            if public_base_url:
+                url = f"{public_base_url}{request.url.path}"
+                if request.url.query:
+                    url += f"?{request.url.query}"
+            else:
+                proto = request.headers.get("x-forwarded-proto", "")
+                if proto.startswith("https"):
+                    url = str(request.url).replace("http://", "https://", 1)
+                else:
+                    url = str(request.url)
+
             params = {k: str(v) for k, v in form_data.items()}
             if not verify_twilio_signature(url, params, twilio_sig):
                 raise HTTPException(status_code=401, detail="Invalid Twilio signature")
@@ -135,38 +160,53 @@ async def receive_whatsapp_message(request: Request):
     # 2. Handle Meta WhatsApp Cloud API or Direct JSON
     else:
         meta_sig = request.headers.get("x-hub-signature-256")
-        if meta_sig and META_APP_SECRET and not verify_meta_signature(raw_body, meta_sig):
-            raise HTTPException(status_code=401, detail="Invalid Meta signature")
 
         try:
             payload = await request.json()
         except Exception:
             payload = {}
 
-        # If it's a Meta Cloud API webhook delivery (has 'entry') and secret is configured, require signature
-        if "entry" in payload and META_APP_SECRET:
-            if not verify_meta_signature(raw_body, meta_sig):
-                raise HTTPException(status_code=401, detail="Invalid Meta signature")
-
         # Meta Cloud API payload format:
         # entry[0].changes[0].value.messages[0].text.body
-        try:
-            entry = payload.get("entry", [{}])[0]
-            change = entry.get("changes", [{}])[0]
-            value = change.get("value", {})
-            messages = value.get("messages", [])
-            if messages:
-                msg = messages[0]
-                sender_number = msg.get("from", "unknown")
-                if msg.get("type") == "text":
-                    incoming_text = msg.get("text", {}).get("body", "")
-        except Exception:
-            pass
+        if "entry" in payload:
+            is_meta_webhook = True
+            if (env == "production" or meta_secret):
+                if not meta_sig:
+                    raise HTTPException(status_code=401, detail="X-Hub-Signature-256 required for Meta webhook")
+                if not verify_meta_signature(raw_body, meta_sig):
+                    raise HTTPException(status_code=401, detail="Invalid Meta signature")
+            try:
+                entry = payload.get("entry", [{}])[0]
+                change = entry.get("changes", [{}])[0]
+                value = change.get("value", {})
+                messages = value.get("messages", [])
+                if messages:
+                    msg = messages[0]
+                    # Outbound recipient must strictly come from the verified Meta message payload
+                    sender_number = msg.get("from", "unknown")
+                    if msg.get("type") == "text":
+                        incoming_text = msg.get("text", {}).get("body", "")
+            except Exception:
+                pass
+        else:
+            # Direct JSON payload (e.g. {"message": "...", "from_number": "..."})
+            # SECURITY ENFORCEMENT:
+            # Direct unauthenticated JSON is ONLY permitted when ENVIRONMENT is development AND META_APP_SECRET is not configured.
+            # In production, or whenever META_APP_SECRET is configured, unauthenticated requests are strictly rejected.
+            if env == "production":
+                raise HTTPException(
+                    status_code=401,
+                    detail="Direct unauthenticated JSON webhook is disabled in production. Meta or Twilio signed request required."
+                )
+            if meta_secret:
+                raise HTTPException(
+                    status_code=401,
+                    detail="X-Hub-Signature-256 signature required when META_APP_SECRET is configured."
+                )
 
-        # Fallback to direct test or Twilio JSON payload: {"Body": "...", "message": "...", "text": "..."}
-        if not incoming_text:
             incoming_text = str(payload.get("message") or payload.get("Body") or payload.get("text") or "").strip()
-            sender_number = payload.get("from_number") or payload.get("From") or sender_number
+            # Do NOT trust or use arbitrary user-supplied from_number for outbound messages
+            sender_number = "dev_direct"
 
     if not incoming_text:
         return {"status": "ignored", "reason": "No readable text content found in webhook"}
@@ -178,12 +218,14 @@ async def receive_whatsapp_message(request: Request):
     answer_text = bot_response.get("content", "Maaf kijiye, abhi process nahi ho paya.")
     wa_formatted_text = format_for_whatsapp(answer_text)
 
-    # If outbound credentials exist, send message back via Meta Graph API asynchronously
-    if WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_ID and sender_number != "unknown":
+    # Security rule: Outbound Meta API message is ONLY sent to senders verified from a genuine Meta Webhook payload
+    access_token = os.environ.get("WHATSAPP_ACCESS_TOKEN") or os.environ.get("WHATSAPP_TOKEN") or WHATSAPP_ACCESS_TOKEN
+    phone_id = os.environ.get("WHATSAPP_PHONE_ID") or WHATSAPP_PHONE_ID
+    if access_token and phone_id and is_meta_webhook and sender_number != "unknown" and sender_number != "dev_direct":
         try:
-            url = f"https://graph.facebook.com/v19.0/{WHATSAPP_PHONE_ID}/messages"
+            url = f"https://graph.facebook.com/v19.0/{phone_id}/messages"
             headers = {
-                "Authorization": f"Bearer {WHATSAPP_ACCESS_TOKEN}",
+                "Authorization": f"Bearer {access_token}",
                 "Content-Type": "application/json",
             }
             body = {

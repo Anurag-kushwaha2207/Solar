@@ -20,7 +20,8 @@ from constants import (
 
 
 class ActivePlantData:
-    def __init__(self):
+    def __init__(self, tenant_id: str = "demo"):
+        self.tenant_id = tenant_id
         self.reset_to_demo()
 
     def reset_to_demo(self):
@@ -151,6 +152,29 @@ class ActivePlantData:
         }
 
 
-# Singleton active data store
-active_plant = ActivePlantData()
+class MultiTenantPlantStore:
+    """Manages isolated active plant stores for each authenticated tenant / plantId."""
+    def __init__(self):
+        self._tenants: Dict[str, ActivePlantData] = {}
+        self.default_plant = ActivePlantData("demo")
+
+    def get_plant(self, tenant_id: Optional[str] = None) -> ActivePlantData:
+        if not tenant_id or tenant_id in ("demo", "plant_demo", "1", "plant_1"):
+            return self.default_plant
+        if tenant_id not in self._tenants:
+            self._tenants[tenant_id] = ActivePlantData(tenant_id)
+        return self._tenants[tenant_id]
+
+    def reset_to_demo(self):
+        self.default_plant.reset_to_demo()
+        self._tenants.clear()
+
+    def __getattr__(self, name):
+        return getattr(self.default_plant, name)
+
+
+# Singleton active data store supporting both global baseline and multi-tenant isolation
+active_plant_store = MultiTenantPlantStore()
+active_plant = active_plant_store
+get_plant_data = active_plant_store.get_plant
 

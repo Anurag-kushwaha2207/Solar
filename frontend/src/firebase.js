@@ -32,14 +32,30 @@ import {
   getDownloadURL,
 } from 'firebase/storage'
 
-// Read credentials from .env or fallback to developer demo config
+// Read credentials from environment variables
+const apiKey = import.meta.env.VITE_FIREBASE_API_KEY || ''
+const authDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || ''
+const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || ''
+const storageBucket = import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || ''
+const messagingSenderId = import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || ''
+const appId = import.meta.env.VITE_FIREBASE_APP_ID || ''
+
+// Honest configuration flag: True ONLY if real credentials are provided
+export const isFirebaseConfigured = Boolean(
+  apiKey &&
+  projectId &&
+  projectId !== 'urjamind-energy' &&
+  !apiKey.includes('Placeholder') &&
+  !apiKey.includes('DemoKey')
+)
+
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDemoKeyUrjaMind2026RajkotFoundry",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "urjamind-energy.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "urjamind-energy",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "urjamind-energy.appspot.com",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "102938475612",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:102938475612:web:abcdef1234567890",
+  apiKey: isFirebaseConfigured ? apiKey : 'AIzaSy_UNCONFIGURED_KEY',
+  authDomain: isFirebaseConfigured ? authDomain : 'unconfigured.firebaseapp.com',
+  projectId: isFirebaseConfigured ? projectId : 'unconfigured',
+  storageBucket: isFirebaseConfigured ? storageBucket : 'unconfigured.appspot.com',
+  messagingSenderId: messagingSenderId || '000000000000',
+  appId: appId || '1:000000000000:web:000000000000',
 }
 
 // Initialize Firebase safely
@@ -49,8 +65,21 @@ export const db = getFirestore(app)
 export const storage = getStorage(app)
 export const googleProvider = new GoogleAuthProvider()
 
+/**
+ * Returns current authenticated user UID as plantId, or 'plant_demo' as guest fallback.
+ */
+export const getCurrentPlantId = () => {
+  return auth?.currentUser?.uid || 'plant_demo'
+}
+
 // ── Auth Helpers ─────────────────────────────────────────────────────────────
 export const loginWithGoogle = async () => {
+  if (!isFirebaseConfigured) {
+    return {
+      success: false,
+      error: 'Firebase is not configured. Please add your VITE_FIREBASE_* credentials in frontend/.env to enable Google Authentication.',
+    }
+  }
   try {
     const result = await signInWithPopup(auth, googleProvider)
     return { success: true, user: result.user }
@@ -61,6 +90,12 @@ export const loginWithGoogle = async () => {
 }
 
 export const loginWithEmail = async (email, password) => {
+  if (!isFirebaseConfigured) {
+    return {
+      success: false,
+      error: 'Firebase is not configured. Please add your VITE_FIREBASE_* credentials in frontend/.env to enable Email Authentication.',
+    }
+  }
   try {
     const cred = await signInWithEmailAndPassword(auth, email, password)
     return { success: true, user: cred.user }
@@ -94,10 +129,14 @@ export const subscribeAuth = (callback) => {
 }
 
 // ── Storage Helpers ──────────────────────────────────────────────────────────
-export const uploadBillDocument = async (file, plantId = "plant_1") => {
+export const uploadBillDocument = async (file, plantId = null) => {
+  const targetPlantId = plantId || getCurrentPlantId()
+  if (!isFirebaseConfigured) {
+    return { success: false, error: 'Firebase Storage not configured' }
+  }
   try {
     const timestamp = Date.now()
-    const storageRef = ref(storage, `bills/${plantId}/${timestamp}_${file.name}`)
+    const storageRef = ref(storage, `bills/${targetPlantId}/${timestamp}_${file.name}`)
     const snapshot = await uploadBytes(storageRef, file)
     const downloadUrl = await getDownloadURL(snapshot.ref)
     return { success: true, downloadUrl, path: snapshot.ref.fullPath }
@@ -108,9 +147,13 @@ export const uploadBillDocument = async (file, plantId = "plant_1") => {
 }
 
 // ── Firestore Helpers ────────────────────────────────────────────────────────
-export const savePlantRecord = async (plantId, data) => {
+export const savePlantRecord = async (plantId = null, data) => {
+  const targetPlantId = plantId || getCurrentPlantId()
+  if (!isFirebaseConfigured) {
+    return { success: false, error: 'Firestore not configured' }
+  }
   try {
-    const plantRef = doc(db, "plants", String(plantId))
+    const plantRef = doc(db, "plants", String(targetPlantId))
     await setDoc(plantRef, { ...data, updatedAt: serverTimestamp() }, { merge: true })
     return { success: true }
   } catch (err) {
@@ -119,9 +162,13 @@ export const savePlantRecord = async (plantId, data) => {
   }
 }
 
-export const logCopilotChat = async (plantId, userMsg, botReply, toolUsed) => {
+export const logCopilotChat = async (plantId = null, userMsg, botReply, toolUsed) => {
+  const targetPlantId = plantId || getCurrentPlantId()
+  if (!isFirebaseConfigured) {
+    return { success: false, error: 'Firestore not configured' }
+  }
   try {
-    const chatCol = collection(db, `plants/${plantId}/copilot_history`)
+    const chatCol = collection(db, `plants/${targetPlantId}/copilot_history`)
     await addDoc(chatCol, {
       user: userMsg,
       bot: botReply,

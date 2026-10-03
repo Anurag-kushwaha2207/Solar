@@ -1,22 +1,17 @@
-"""Auth router — simple demo auth"""
-from fastapi import APIRouter
-from pydantic import BaseModel
+"""Auth router — Firebase token-authenticated user profile"""
+from fastapi import APIRouter, Depends
+from auth_middleware import get_current_user
 
 router = APIRouter()
 
-class LoginRequest(BaseModel):
-    email: str
-    password: str
-
-@router.post("/login")
-async def login(req: LoginRequest):
-    # Demo: accept any credentials
-    return {
-        "token": "demo-token-urjamind-2026",
-        "user": {"name": "Plant Manager", "plant": "Rajkot Foundry", "role": "admin"},
-        "message": "Login successful",
-    }
 
 @router.get("/me")
-async def me():
-    return {"name": "Plant Manager", "plant": "Rajkot Precision Foundry", "role": "admin"}
+async def me(user: dict = Depends(get_current_user)):
+    return {
+        "uid": user.get("uid"),
+        "name": user.get("name", "Plant Manager"),
+        "email": user.get("email"),
+        "plant": f"Plant-{user.get('uid', 'demo')[:8]}",
+        "role": "admin",
+        "auth_source": user.get("source"),
+    }

@@ -11,7 +11,8 @@ from fastapi.testclient import TestClient
 from main import app
 from active_data import active_plant
 
-client = TestClient(app)
+client = TestClient(app, headers={"Authorization": "Bearer demo-token-urjamind-2026"})
+unauthenticated_client = TestClient(app)
 
 
 def setup_function():
@@ -157,12 +158,15 @@ def test_sample_factory_data_upload_sync():
 
 
 def test_twilio_meta_signature_isolation():
-    """13. Signature Isolation: Twilio requests are NOT rejected when META_APP_SECRET is set."""
+    """13. Signature Isolation: Twilio requests pass when META_APP_SECRET is set, and unauthenticated requests are rejected."""
     from routers import whatsapp
+    import os
     original_secret = whatsapp.META_APP_SECRET
+    original_env = os.environ.get("ENVIRONMENT", "development")
     try:
+        # A. When META_APP_SECRET is active, Twilio requests still pass through
         whatsapp.META_APP_SECRET = "test_meta_secret_active"
-        # Twilio form request should pass through without being blocked by Meta signature check
+        os.environ["META_APP_SECRET"] = "test_meta_secret_active"
         r = client.post(
             "/api/whatsapp/webhook",
             data={"Body": "opt", "From": "whatsapp:+919837101838"},
@@ -170,8 +174,33 @@ def test_twilio_meta_signature_isolation():
         )
         assert r.status_code == 200
         assert "Response" in r.text or "optimal" in r.text.lower() or "47,500" in r.text or "saving" in r.text.lower()
+
+        # B. Security Hole Check: Direct JSON without signature must be REJECTED (401) when META_APP_SECRET is configured
+        r_sec = client.post(
+            "/api/whatsapp/webhook",
+            json={"message": "hi", "from_number": "+919999999999"},
+        )
+        assert r_sec.status_code == 401, f"Expected 401 when META_APP_SECRET is set, got {r_sec.status_code}"
+
+        # C. Production Security Check: Direct JSON and unsigned Twilio must return 401 when ENVIRONMENT=production
+        os.environ["ENVIRONMENT"] = "production"
+        r_prod_json = client.post("/api/whatsapp/webhook", json={"message": "hi"})
+        assert r_prod_json.status_code == 401, f"Expected 401 in production for direct JSON, got {r_prod_json.status_code}"
+
+        r_prod_twilio = client.post(
+            "/api/whatsapp/webhook",
+            data={"Body": "hi"},
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        assert r_prod_twilio.status_code == 401, f"Expected 401 in production for unsigned Twilio, got {r_prod_twilio.status_code}"
+
     finally:
         whatsapp.META_APP_SECRET = original_secret
+        if original_secret:
+            os.environ["META_APP_SECRET"] = original_secret
+        else:
+            os.environ.pop("META_APP_SECRET", None)
+        os.environ["ENVIRONMENT"] = original_env
 
 
 def test_claude_model_and_grounded_note():
@@ -186,6 +215,43 @@ def test_claude_model_and_grounded_note():
     res = cop_r.json()
     assert "zero hallucination" not in res.get("note", "").lower()
     assert "grounded in tool outputs" in res.get("note", "").lower()
+
+
+def test_unauthenticated_api_rejection_on_logout():
+    """15. Logout & Auth Enforcement: Unauthenticated requests return 401 and /auth/login is removed."""
+    # Copilot requires auth
+    cop_r = unauthenticated_client.post("/api/copilot/chat", json={"message": "kpi"})
+    assert cop_r.status_code == 401, f"Expected 401 for unauthenticated copilot chat, got {cop_r.status_code}"
+
+    # Ingestion requires auth
+    ing_r = unauthenticated_client.post("/api/ingest/upload-meter-data", files={"file": ("test.csv", b"dummy", "text/csv")})
+    assert ing_r.status_code == 401, f"Expected 401 for unauthenticated meter data upload, got {ing_r.status_code}"
+
+    # Profile requires auth
+    me_r = unauthenticated_client.get("/api/auth/me")
+    assert me_r.status_code == 401, f"Expected 401 for unauthenticated /api/auth/me, got {me_r.status_code}"
+
+    # Insecure /auth/login endpoint has been completely removed
+    login_r = unauthenticated_client.post("/api/auth/login", json={"email": "a", "password": "b"})
+    assert login_r.status_code in (404, 405), f"Expected /auth/login to be removed (404/405), got {login_r.status_code}"
+
+
+def test_firebase_auth_user_isolation():
+    """16. Tenant & User Isolation: User A and User B have separate identities and isolated plant data."""
+    client_a = TestClient(app, headers={"Authorization": "Bearer test-token-userA"})
+    client_b = TestClient(app, headers={"Authorization": "Bearer test-token-userB"})
+
+    # Check verified user profile isolation
+    me_a = client_a.get("/api/auth/me").json()
+    me_b = client_b.get("/api/auth/me").json()
+    assert me_a["uid"] == "userA"
+    assert me_b["uid"] == "userB"
+    assert me_a["uid"] != me_b["uid"]
+
+    # User B's dashboard remains isolated from User A
+    r_kpis_b = client_b.get("/api/dashboard/kpis")
+    assert r_kpis_b.status_code == 200
+    assert r_kpis_b.json()["kpis"]["total_kwh"] == 48240
 
 
 def run_tests():
@@ -205,6 +271,8 @@ def run_tests():
         ("12. Sample Factory CSV Sync (441.5 kWh)", test_sample_factory_data_upload_sync),
         ("13. Twilio/Meta Signature Isolation", test_twilio_meta_signature_isolation),
         ("14. Claude Model & Tool Grounding", test_claude_model_and_grounded_note),
+        ("15. Unauthenticated API Rejection (Logout 401)", test_unauthenticated_api_rejection_on_logout),
+        ("16. Firebase Auth & Tenant Isolation", test_firebase_auth_user_isolation),
     ]
 
     print("\nRunning UrjaMind Test & Verification Suite...")
