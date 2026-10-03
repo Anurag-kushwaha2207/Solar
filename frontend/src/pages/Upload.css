@@ -39,7 +39,7 @@
 .wa-btn:hover { background:#1ebe5a; transform:translateY(-1px); }
 .upload-actions { display:flex; gap:16px; justify-content:center; flex-wrap:wrap; padding:8px 0 20px; }
 /* Modal */
-.modal-overlay { position:fixed; inset:0; z-index:200; background:rgba(5,10,20,0.95); backdrop-filter:blur(8px); display:flex; align-items:center; justify-content:center; animation:fadeIn 0.3s; }
+.modal-overlay { position:fixed; inset:0; z-index:200; background:rgba(5,10,20,0.95); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); display:flex; align-items:center; justify-content:center; animation:fadeIn 0.3s; }
 .modal-box { background:var(--surface); border:1px solid var(--border2); border-radius:24px; padding:44px; max-width:480px; width:90%; }
 .modal-title { font-family:'Outfit',sans-serif; font-size:24px; font-weight:800; text-align:center; margin-bottom:8px; }
 .modal-sub { font-size:14px; color:var(--text2); text-align:center; margin-bottom:28px; }

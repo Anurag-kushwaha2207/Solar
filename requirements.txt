@@ -1,6 +1,21 @@
-fastapi
-uvicorn
-pandas
-numpy
-streamlit
-python-multipart
+# UrjaMind Backend Dependencies
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+python-multipart>=0.0.9
+pydantic>=2.7.0
+pandas>=2.2.0
+numpy>=1.26.0
+scipy>=1.13.0
+scikit-learn>=1.4.0
+ortools>=9.9.0
+PyMuPDF>=1.24.0
+anthropic>=0.25.0
+requests>=2.31.0
+python-dotenv>=1.0.0
+aiofiles>=23.2.0
+pytest>=8.0.0
+httpx>=0.27.0
+sqlalchemy>=2.0.0
+aiosqlite>=0.20.0
+firebase-admin>=7.0.0
+streamlit>=1.32.0

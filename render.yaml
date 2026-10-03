@@ -1,0 +1,35 @@
+# =====================================================================
+# UrjaMind — Render Blueprint Specification (Infrastructure-as-Code)
+# =====================================================================
+# Deploy via Render Dashboard -> Blueprints -> New Blueprint Instance
+# Connects: https://github.com/Anurag-kushwaha2207/Solar
+# =====================================================================
+
+services:
+  - type: web
+    name: urjamind-backend
+    runtime: python
+    region: singapore
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: PORT
+        value: 10000
+      - key: ANTHROPIC_MODEL
+        value: claude-sonnet-5-5
+      - key: ANTHROPIC_API_KEY
+        sync: false # Render will prompt you securely for your API key
+      - key: FIREBASE_PROJECT_ID
+        value: urjamind-energy
+      - key: PUBLIC_BASE_URL
+        fromService:
+          type: web
+          name: urjamind-backend
+          property: host
+      - key: ALLOWED_ORIGINS
+        value: https://urjamind-energy.web.app,https://urjamind-energy.firebaseapp.com,http://localhost:5173
