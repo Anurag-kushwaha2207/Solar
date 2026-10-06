@@ -34,6 +34,8 @@ try:
 except ImportError:
     ORTOOLS_AVAILABLE = False
 
+from constants import SEP_TOTAL_KWH
+
 
 # ── ToD tariff ───────────────────────────────────────────────────────────────
 def _slot_rate(slot: int) -> float:
@@ -170,27 +172,31 @@ def get_plant_jobs(scale_factor: float = 1.0) -> List[Job]:
         c3 = cnc_list[2] if len(cnc_list) > 2 else "CNC Machine #3"
         c4 = cnc_list[3] if len(cnc_list) > 3 else "CNC Machine #4"
 
-        # Calibrated for 4x 22 kW CNC machines:
-        # Yields ₹864.0/day = ₹21,600/month ToD tariff shift saving (12.2% of ₹176,450 bill)
+        p_scale = max(0.1, float(scale_factor)) if scale_factor else 1.0
+        kw = round(22.0 * p_scale, 1)
+        aux_kw = round(3.3 * p_scale, 1)
+
+        # Calibrated for 4x 22 kW CNC machines at reference 18,450 kWh bill:
+        # At scale=1.0: yields exactly ₹20,239/month ToD tariff shift saving (11.5% of ₹176,450 bill)
         return [
-            # CNC #1: 22 kW, 26 slots (6.5h). Current: 18:00 (peak). Optimal: 00:00 (off-peak). Saving: ₹325.60/day
-            Job("CNC #1 — Milling Shift", c1, 22.0, 26,
+            # CNC #1: 22 kW, 26 slots (6.5h). Current: 18:00 (peak). Optimal: 00:00 (off-peak).
+            Job("CNC #1 — Milling Shift", c1, kw, 26,
                 deadline_slot=96, earliest_slot=0, is_flexible=True, current_start=72),
 
-            # CNC #2: 22 kW, 26 slots (6.5h). Current: 18:00 (peak). Optimal: 00:00 (off-peak). Saving: ₹325.60/day
-            Job("CNC #2 — Precision Turning", c2, 22.0, 26,
+            # CNC #2: 22 kW, 26 slots (6.5h). Current: 18:00 (peak). Optimal: 00:00 (off-peak).
+            Job("CNC #2 — Precision Turning", c2, kw, 26,
                 deadline_slot=88, earliest_slot=0, is_flexible=True, current_start=72),
 
-            # CNC #3: 22 kW, 24 slots (6h). Current: 17:00 (peak). Optimal: 06:00 (normal). Saving: ₹138.60/day
-            Job("CNC #3 — Heavy Roughing", c3, 22.0, 24,
+            # CNC #3: 22 kW, 24 slots (6h). Current: 17:00 (peak). Optimal: 06:00 (normal).
+            Job("CNC #3 — Heavy Roughing", c3, kw, 24,
                 deadline_slot=96, earliest_slot=24, is_flexible=True, current_start=68),
 
-            # CNC #4: 22 kW, 20 slots (5h). Current: 19:00 (peak). Optimal: 07:00 (normal). Saving: ₹74.20/day
-            Job("CNC #4 — Finishing Batch", c4, 22.0, 20,
+            # CNC #4: 22 kW, 20 slots (5h). Current: 19:00 (peak). Optimal: 07:00 (normal).
+            Job("CNC #4 — Finishing Batch", c4, kw, 20,
                 deadline_slot=88, earliest_slot=24, is_flexible=True, current_start=76),
 
-            # Plant Lighting & Auxiliaries (3.3 kW, fixed day shift).
-            Job("Plant Lighting & Auxiliaries", "Plant Auxiliaries", 3.3, 40,
+            # Plant Lighting & Auxiliaries (fixed day shift).
+            Job("Plant Lighting & Auxiliaries", "Plant Auxiliaries", aux_kw, 40,
                 deadline_slot=96, earliest_slot=32, is_flexible=False, fixed_start=32, current_start=32),
         ]
 
@@ -360,16 +366,13 @@ def _build_result(jobs, solver, start_vars, solve_time, status_name, method, max
         })
 
     saving_day = round(cur_cost - opt_cost, 2)
-    saving_month = round(saving_day * 25, 2)   # 25 working days
+    # Guarantee headline saving matches the exact sum of individual row badges (25 working days)
+    row_savings = [round(j["saving_inr"] * 25) for j in result_jobs]
+    saving_month = float(sum(row_savings))
 
     from active_data import active_plant
-    # Base saving percentage on active plant monthly bill (e.g. 21,600 / 176,450 = 12.2%)
+    # Base saving percentage on active plant monthly bill
     total_bill = float(getattr(active_plant, "total_bill_inr", 296500.0))
-    if active_plant.source != "demo_baseline" and abs(saving_month - 21600) < 2500:
-        saving_month = 21600.0
-        saving_day = 864.0
-        opt_cost = round(cur_cost - saving_day, 2)
-
     saving_pct = round(saving_month / max(total_bill, 1.0) * 100, 1)
 
     return SchedulerResult(
@@ -486,15 +489,8 @@ def _fallback_greedy(jobs, max_demand_kva, solve_time=0.0, status_name="GREEDY_H
 
     from active_data import active_plant
     total_bill = float(getattr(active_plant, "total_bill_inr", 296500.0))
-    saving_month = round(saving_day * 25, 2)
-
-    # In uploaded plants, Greedy dispatch acts sequentially without global lookahead
-    # resulting in realistic sub-optimal packing compared to CP-SAT global search
-    if active_plant.source != "demo_baseline" and saving_month >= 15000:
-        saving_month = 16848.0
-        saving_day = 673.92
-        opt_cost = round(cur_cost - saving_day, 2)
-
+    row_savings = [round(j["saving_inr"] * 25) for j in result_jobs]
+    saving_month = float(sum(row_savings))
     saving_pct = round(saving_month / max(total_bill, 1.0) * 100, 1)
 
     return SchedulerResult(

@@ -67,12 +67,14 @@ export const fetchIntensity    = ()      => api.get('/carbon/intensity-trend').t
 export const chatWithCopilot   = (msg)   => api.post('/copilot/chat', { message: msg }).then(r => r.data)
 export const fetchQuickQs      = ()      => api.get('/copilot/quick-questions').then(r => r.data)
 
-// ── Ingestion ──────────────────────────────────────────────────────────────
 export const loadDemoData      = ()      => api.post('/ingest/load-demo').then(r => r.data)
 export const uploadBill        = (fd)    => api.post('/ingest/upload-bill', fd, { headers: { 'Content-Type': 'multipart/form-data' }}).then(r => r.data)
 export const confirmBill       = (body)  => api.post('/ingest/confirm-bill', body).then(r => r.data)
 export const uploadMeter       = (fd)    => api.post('/ingest/upload-meter-data', fd, { headers: { 'Content-Type': 'multipart/form-data' }}).then(r => r.data)
 export const uploadProduction  = (fd)    => api.post('/ingest/upload-production', fd, { headers: { 'Content-Type': 'multipart/form-data' }}).then(r => r.data)
 export const uploadEquipment   = (fd)    => api.post('/ingest/upload-equipment', fd, { headers: { 'Content-Type': 'multipart/form-data' }}).then(r => r.data)
+export const fetchFileStatus   = ()      => api.get('/ingest/file-status').then(r => r.data)
+export const getIntervalTemplateUrl = () => `${normalizedBaseUrl}/ingest/template/interval-csv`
 
 export default api
+

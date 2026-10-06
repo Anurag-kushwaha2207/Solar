@@ -17,7 +17,12 @@ class ScheduleRequest(BaseModel):
 
 
 def _current_jobs():
-    scale = active_plant.total_kwh / max(1.0, float(SEP_TOTAL_KWH))
+    if active_plant.source == "demo_baseline":
+        scale = active_plant.total_kwh / max(1.0, float(SEP_TOTAL_KWH))
+    else:
+        # Reference 18,450 kWh for uploaded CNC machining plant (4x 22 kW machines)
+        ref_kwh = 18450.0 if any("cnc" in m.lower() for m in active_plant.machines.keys()) else float(SEP_TOTAL_KWH)
+        scale = active_plant.total_kwh / max(1.0, ref_kwh)
     return get_plant_jobs(scale)
 
 

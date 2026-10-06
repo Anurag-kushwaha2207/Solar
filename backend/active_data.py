@@ -47,6 +47,16 @@ class ActivePlantData:
         self.machines = dict(MACHINE_KWH)
         self.raw_df: Optional[pd.DataFrame] = None
         self.rows_count = 2880  # 30 days * 96 slots
+        self.spot_load_readings = {}
+        self.interval_warning = None
+        self.production_extrapolation = None
+        self.has_real_baseline = True
+        self.file_statuses = {
+            "bill": {"status": "Demo baseline", "reason": "Standard PGVCL demo electricity bill (48,240 kWh)."},
+            "interval": {"status": "Demo baseline", "reason": "30-day 15-minute simulation baseline."},
+            "production": {"status": "Demo baseline", "reason": "Standard 12,580 kg monthly production baseline."},
+            "equipment": {"status": "Demo baseline", "reason": "Standard 5-machine equipment profile."}
+        }
 
     def recalculate_machine_energy(self):
         """Allocate total energy consumption across machines based on installed equipment or baseline."""
@@ -222,21 +232,42 @@ class ActivePlantData:
         peak_kw = max(load_values) if load_values else (daily_kwh / 16)  # assume 16h operating
 
         if daily_kwh > 0:
-            if self.source == "user_uploaded_bill_ocr" and self.total_kwh > 0:
+            spot_dict = {k: float(re.findall(r'[\d.]+', v)[0]) for k, v in kv_map.items() if 'load' in k and ':' in k and re.findall(r'[\d.]+', v)}
+            self.spot_load_readings = spot_dict
+            estimated_monthly = round(daily_kwh * 26, 1)
+
+            if self.source != "demo_baseline" and self.total_kwh > 0:
                 # Retain verified monthly bill figure; sync peak load from interval measurements
                 self.peak_kw = round(peak_kw, 1)
+                scale_diff = round(estimated_monthly / max(1.0, self.total_kwh), 1)
+                warning_msg = None
+                if scale_diff >= 2.0:
+                    warning_msg = (
+                        f"Notice: Interval daily total ({daily_kwh:,.0f} kWh/day ≈ {estimated_monthly:,.0f} kWh/month) "
+                        f"is {scale_diff}x higher than the monthly electricity bill ({int(self.total_kwh):,} kWh). "
+                        "The verified monthly bill is retained as the source of truth for total energy; spot readings are used for load shape only."
+                    )
+                    self.interval_warning = warning_msg
+
+                self.file_statuses["interval"] = {
+                    "status": "Partially used",
+                    "reason": f"Spot readings only ({len(spot_dict)} readings) — not a full interval series. Used for load shape; monthly bill ({int(self.total_kwh):,} kWh) retained for billing."
+                }
                 return {
                     "success": True,
-                    "mode": "interval_pdf_parsed",
+                    "mode": "interval_pdf_spot_readings",
                     "daily_kwh": daily_kwh,
                     "monthly_kwh_estimated": self.total_kwh,
                     "peak_kw": self.peak_kw,
-                    "message": f"Interval data parsed: {daily_kwh:,.0f} kWh/day, peak {self.peak_kw} kW. Monthly bill ({self.total_kwh:,.0f} kWh) retained as source of truth.",
-                    "note": "15-minute load profile synced with active monthly bill.",
+                    "spot_readings_count": len(spot_dict),
+                    "warning": warning_msg,
+                    "file_status": "Partially used",
+                    "message": f"Interval data parsed: {daily_kwh:,.0f} kWh/day, peak {self.peak_kw} kW. Spot readings ({len(spot_dict)} points) used for load shape. Monthly bill ({int(self.total_kwh):,} kWh) retained as source of truth.",
+                    "note": "Spot readings only — not a full interval series.",
                 }
 
-            # Extrapolate to 26 working days (note: this is one day's data)
-            monthly_kwh = round(daily_kwh * 26, 1)
+            # Extrapolate to 26 working days if no prior bill
+            monthly_kwh = estimated_monthly
             self.source = "user_uploaded_interval_pdf"
             self.filename = filename
             self.total_kwh = monthly_kwh
@@ -244,15 +275,21 @@ class ActivePlantData:
             self.peak_kw = round(peak_kw, 1)
             self.specific_energy = round(self.total_kwh / max(1.0, self.production_kg), 3)
             self.deviation_pct = round((self.specific_energy - BASELINE_SEC_ENERGY) / BASELINE_SEC_ENERGY * 100, 1)
+            self.file_statuses["interval"] = {
+                "status": "Partially used",
+                "reason": f"Spot readings only ({len(spot_dict)} readings). Estimated monthly consumption based on assumed 26 working days."
+            }
             self.recalculate_machine_energy()
             return {
                 "success": True,
-                "mode": "interval_pdf_parsed",
+                "mode": "interval_pdf_spot_readings",
                 "daily_kwh": daily_kwh,
                 "monthly_kwh_estimated": monthly_kwh,
                 "peak_kw": self.peak_kw,
-                "message": f"Interval PDF parsed: {daily_kwh} kWh/day -> {monthly_kwh} kWh/month estimated (26 working days). Live dashboard updated.",
-                "note": "This is a single-day snapshot. Monthly figure is an estimate.",
+                "spot_readings_count": len(spot_dict),
+                "file_status": "Partially used",
+                "message": f"Interval PDF parsed: {daily_kwh} kWh/day -> {monthly_kwh} kWh/month estimated (assumed 26 working days). Spot readings used for load shape.",
+                "note": "Spot readings only — not a full interval series.",
             }
 
         return {"success": False, "mode": "demo_values_used", "reason": "Could not extract daily energy from interval PDF."}
@@ -307,6 +344,10 @@ class ActivePlantData:
         self.deviation_pct = round((self.specific_energy - BASELINE_SEC_ENERGY) / BASELINE_SEC_ENERGY * 100, 1)
 
         self.recalculate_machine_energy()
+        self.file_statuses["bill"] = {
+            "status": "Parsed",
+            "reason": f"Electricity bill parsed successfully ({int(self.total_kwh):,} kWh, ₹{int(self.total_bill_inr):,}, PF {self.avg_pf}). Priority source of truth for total energy."
+        }
 
         return {
             "success": True,
@@ -317,6 +358,7 @@ class ActivePlantData:
             "total_bill_inr": self.total_bill_inr,
             "peak_kw": self.peak_kw,
             "avg_pf": self.avg_pf,
+            "file_status": "Parsed",
             "message": f"Successfully extracted bill data for '{self.plant_name}' from {filename}. Live dashboard updated.",
         }
 
@@ -326,6 +368,10 @@ class ActivePlantData:
         if res.get("success") and res.get("machines"):
             self.equipment_list = res["machines"]
             self.recalculate_machine_energy()
+            self.file_statuses["equipment"] = {
+                "status": "Parsed",
+                "reason": f"Equipment register parsed ({len(self.equipment_list)} machines, {res['total_installed_kw']} kW load registered)."
+            }
             return {
                 "success": True,
                 "status": "processed",
@@ -334,8 +380,13 @@ class ActivePlantData:
                 "machines_count": len(self.equipment_list),
                 "total_installed_kw": res["total_installed_kw"],
                 "machines": [m["name"] for m in self.equipment_list],
+                "file_status": "Parsed",
                 "message": f"✅ Parsed {len(self.equipment_list)} machines ({res['total_installed_kw']} kW load) from equipment register. Machine disaggregation updated live!",
             }
+        self.file_statuses["equipment"] = {
+            "status": "Not used",
+            "reason": "Could not recognize machines in equipment file. Standard profile retained."
+        }
         return {
             "success": False,
             "status": "demo_fallback",
@@ -343,6 +394,7 @@ class ActivePlantData:
             "file": filename,
             "machines_count": len(self.machines),
             "total_installed_kw": 355.0,
+            "file_status": "Not used",
             "message": "Equipment register received — standard 5-machine profile active.",
         }
 
@@ -355,17 +407,25 @@ class ActivePlantData:
             epu = res.get("energy_per_unit", 0.0)
 
             if days == 1 and epu > 0:
-                # Extrapolate monthly units matching the logged specific energy
                 self.production_kg = round(self.total_kwh / max(0.01, epu), 1)
                 self.specific_energy = epu
+                self.production_extrapolation = "Assumed 26 working days"
+                self.has_real_baseline = False
             elif days == 1:
                 self.production_kg = round(raw_prod * 26, 1)
                 self.specific_energy = round(self.total_kwh / max(1.0, self.production_kg), 3)
+                self.production_extrapolation = "Assumed 26 working days"
+                self.has_real_baseline = False
             else:
                 self.production_kg = round(raw_prod, 1)
                 self.specific_energy = round(self.total_kwh / max(1.0, self.production_kg), 3)
+                self.has_real_baseline = True
 
-            self.deviation_pct = round((self.specific_energy - BASELINE_SEC_ENERGY) / BASELINE_SEC_ENERGY * 100, 1)
+            self.deviation_pct = 0.0 if not self.has_real_baseline else round((self.specific_energy - BASELINE_SEC_ENERGY) / BASELINE_SEC_ENERGY * 100, 1)
+            self.file_statuses["production"] = {
+                "status": "Parsed",
+                "reason": f"Production log parsed ({raw_prod:,.0f} units output, {self.specific_energy} kWh/unit). Extrapolated with assumed 26 working days."
+            }
             return {
                 "success": True,
                 "status": "processed",
@@ -375,8 +435,14 @@ class ActivePlantData:
                 "total_production_kg": self.production_kg,
                 "specific_energy": self.specific_energy,
                 "deviation_pct": self.deviation_pct,
-                "message": f"Successfully parsed {raw_prod:,.0f} units output from {filename}. Specific Energy updated to {self.specific_energy} kWh/unit!",
+                "production_extrapolation": self.production_extrapolation,
+                "file_status": "Parsed",
+                "message": f"Successfully parsed {raw_prod:,.0f} units output from {filename}. Specific Energy updated to {self.specific_energy} kWh/unit (Assumed 26 working days).",
             }
+        self.file_statuses["production"] = {
+            "status": "Not used",
+            "reason": "Could not recognize production output in log. Standard benchmark retained."
+        }
         return {
             "success": False,
             "status": "demo_fallback",
@@ -384,6 +450,7 @@ class ActivePlantData:
             "file": filename,
             "days_detected": 30,
             "total_production_kg": 12580.0,
+            "file_status": "Not used",
             "message": "Production log received (using standard 12,580 kg manufacturing benchmark).",
         }
 

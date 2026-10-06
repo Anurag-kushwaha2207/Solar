@@ -28,6 +28,14 @@ async def get_report(plant_id: int = 1):
     prod_units = active_plant.production_kg if active_plant.production_kg > 0 else (SEP_PRODUCTION_KG if is_demo else 1.0)
     sep_intensity = round(sep_total * 1000 / prod_units, 3)
 
+    from cpsat_scheduler import get_plant_jobs, solve_cpsat
+    scale = active_plant.total_kwh / max(1.0, float(SEP_TOTAL_KWH)) if is_demo else 1.0
+    jobs = get_plant_jobs(scale)
+    sched_md = float(getattr(active_plant, "contract_kva", 250.0) or 250.0)
+    sched_res = solve_cpsat(jobs, max_demand_kva=sched_md, time_limit_s=3.0)
+    tod_saving_inr = int(round(sched_res.saving_inr_month))
+    tod_saving_pct = sched_res.saving_pct
+
     if is_demo:
         monthly_scope1 = MONTHLY_SCOPE1
         monthly_scope2 = list(MONTHLY_SCOPE2)
@@ -37,7 +45,6 @@ async def get_report(plant_id: int = 1):
         months_list = MONTHS_6
         scope1_sources = ["Diesel generator", "Furnace oil"]
         tod_job_name = "Furnace ToD shift (tariff saving only)"
-        tod_saving_inr = SCHEDULER_SAVING_APPROX_INR_MONTH
         mv_table = [
             {
                 "name":           "Compressor idle-elimination (simulated)",
@@ -57,7 +64,7 @@ async def get_report(plant_id: int = 1):
                 "co2_avoided_t":  0.0,
                 "saving_inr":     tod_saving_inr,
                 "status":         "simulated",
-                "note":           "Same kWh, cheaper tariff window — no CO₂ reduction",
+                "note":           f"Same kWh, cheaper tariff window ({tod_saving_pct}% of bill)",
             },
             {
                 "name":           "PF correction — capacitor bank (projected)",
@@ -79,7 +86,6 @@ async def get_report(plant_id: int = 1):
         months_list = [active_plant.billing_period]
         scope1_sources = ["Not reported for this plant (Facility operates 100% on grid power / no fuel log uploaded)"]
         tod_job_name = "CNC Shift Optimization (ToD tariff shift)"
-        tod_saving_inr = 21600
 
         mv_table = [
             {
@@ -90,7 +96,7 @@ async def get_report(plant_id: int = 1):
                 "co2_avoided_t":  0.0,
                 "saving_inr":     tod_saving_inr,
                 "status":         "simulated",
-                "note":           f"Off-peak tariff shift savings for {active_plant.plant_name} (12.2% of bill)",
+                "note":           f"Off-peak tariff shift savings for {active_plant.plant_name} ({tod_saving_pct}% of bill)",
             },
             {
                 "name":           "CNC Standby & Spindle Idle Power Management",

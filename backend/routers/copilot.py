@@ -45,22 +45,22 @@ async def quick_questions():
     from active_data import active_plant
     if active_plant.source == "demo_baseline":
         return [
-            "Bill kyun badha? 📈",
-            "Compressor raat ko kyon chal raha hai?",
-            f"Power factor {SEP_AVG_PF} — kya penalty hai?",
-            "Schedule optimize karo — ToD shift saving kitna hai?",
+            "Why did my bill increase? 📈",
+            "Why is the compressor running at night?",
+            f"Power factor {SEP_AVG_PF} — is there a penalty?",
+            "Optimize schedule — what are the ToD savings?",
             "What operational anomalies were detected?",
-            "Carbon report — Scope 1 aur 2 kitna hai?",
+            "Carbon report — what are Scope 1 & 2 emissions?",
         ]
 
-    pf_txt = f"Power factor {active_plant.avg_pf} (Healthy — No penalty)" if active_plant.avg_pf >= 0.90 else f"Power factor {active_plant.avg_pf} penalty?"
+    pf_txt = f"What is my power factor? ({active_plant.avg_pf}) 📊"
     return [
-        "Bill kyun badha? 📈",
-        "Power factor kya hai? 📊",
-        "CNC machines ka load kya hai? ⚙️",
-        "Schedule optimize karo — ToD shift saving kitna hai? 🚀",
-        "Operational anomalies kya hain? ⚠️",
-        "Carbon report — Scope 2 kitna hai? 🌿",
+        "Why did my bill increase? 📈",
+        pf_txt,
+        "What is the machine load breakdown? ⚙️",
+        "Optimize schedule — what are the ToD savings? 🚀",
+        "What operational anomalies were detected? ⚠️",
+        "Carbon report — what are Scope 2 emissions? 🌿",
     ]
 
 

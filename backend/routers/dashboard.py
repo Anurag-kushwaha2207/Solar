@@ -48,7 +48,12 @@ async def get_kpis(plant_id: int = 1):
         "baseline_specific_energy":  BASELINE_SEC_ENERGY,
         "current_specific_energy":   active_plant.specific_energy,
         "deviation_pct":             active_plant.deviation_pct,
+        "production_extrapolation":  active_plant.production_extrapolation,
+        "has_real_baseline":         active_plant.has_real_baseline,
+        "file_statuses":             active_plant.file_statuses,
+        "interval_warning":          active_plant.interval_warning,
     }
+
 
 
 @router.get("/machine-breakdown")

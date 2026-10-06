@@ -275,13 +275,13 @@ CLAUDE_TOOLS = [
     },
 ]
 
-SYSTEM_PROMPT = """You are UrjaMind Copilot, an agentic AI assistant for Indian SME industrial factory managers (foundries, textiles, engineering units).
-Language style: Conversational, direct, professional Hinglish / English.
+SYSTEM_PROMPT = """You are UrjaMind Copilot, an energy-saving AI assistant for Indian SME industrial facilities.
+Always answer in simple English. Keep responses concise, direct, helpful, and professional.
 
 CRITICAL INTEGRITY & DOMAIN RULES:
 1. STRICT DOMAIN BOUNDARY: You ONLY answer questions about industrial energy management, electricity bills, machine loads, power factor, ToD tariff schedules, and GHG carbon footprint.
 2. If asked an out-of-domain question (e.g. general knowledge, geography, coding, sports, weather, unrelated general chat), politely decline:
-   "Main sirf UrjaMind factory energy data, machine telemetry, ToD tariffs aur carbon compliance ke baare mein madad kar sakta hun."
+   "I can only help with UrjaMind factory energy data, electricity bills, machine telemetry, ToD tariffs, and carbon compliance."
 3. NEVER make up or hardcode numbers. You MUST call tools to retrieve data. Report strictly the values returned by the tools.
 4. Keep operational anomaly savings strictly separate from ToD scheduler savings. Do not mix or double-count them.
 5. If asked about unsupported capabilities (e.g. predictive load forecasting, real-time motor vibration sensors), state clearly that they are planned for Phase 2."""
@@ -312,11 +312,11 @@ def _fallback_tool_router(query: str) -> Dict[str, Any]:
         return {
             "content": (
                 "⚠️ **Load Forecasting Not Available in Phase 1**\n\n"
-                "Time-series predictive forecasting (ARIMA / Prophet) Phase 2 mein planned hai.\n\n"
-                "Main abhi in 4 verified tools par live analysis de sakta hun:\n"
+                "Time-series predictive forecasting (ARIMA / Prophet) is planned for Phase 2.\n\n"
+                "I can provide live analysis using these active tools:\n"
                 "1. 📊 `get_kpis` — Monthly consumption & bill breakdown\n"
-                "2. ⚠️ `get_alerts` — Operational waste & anomalies (Rs. 12,400/mo)\n"
-                "3. 🚀 `run_optimizer` — Real CP-SAT ToD scheduling (Rs. 47,500/mo)\n"
+                "2. ⚠️ `get_alerts` — Operational waste & anomalies\n"
+                "3. 🚀 `run_optimizer` — Real CP-SAT ToD scheduling\n"
                 "4. 🌿 `get_carbon` — GHG Protocol Scope 1/2 + CEA Western Grid"
             ),
             "tool_called": None,
@@ -395,13 +395,13 @@ def _fallback_tool_router(query: str) -> Dict[str, Any]:
         if data["power_factor"] >= 0.90:
             status_pf = (
                 f"✅ **Power Factor {data['power_factor']} is Healthy**\n\n"
-                f"Aapka measured PF **{data['power_factor']}** hai, jo DISCOM threshold (0.90) se upar hai.\n"
-                f"Is mahine **koi penalty nahi lagi (₹0 penalty)**."
+                f"Your measured power factor of **{data['power_factor']}** is above the DISCOM threshold (0.90).\n"
+                f"No penalty incurred (**₹0 penalty**)."
             )
         else:
             status_pf = (
                 f"⚠️ **Low Power Factor ({data['power_factor']})**\n\n"
-                f"Aapka average PF **{data['power_factor']}** DISCOM limit (0.90) se kam hai.\n"
+                f"Your average PF of **{data['power_factor']}** is below the DISCOM threshold (0.90).\n"
                 f"Active penalty: **₹{int(data['pf_penalty_inr']):,}/month**."
             )
         return {
@@ -417,44 +417,49 @@ def _fallback_tool_router(query: str) -> Dict[str, Any]:
         }
 
     # 5. Bill increase / why bill high root-cause
-    if any(k in q for k in ["kyun badha", "why did bill", "bill high", "badha", "increase", "spike", "extra bill"]):
+    if any(k in q for k in ["kyun badha", "why did bill", "bill high", "badha", "increase", "spike", "extra bill", "why bill"]):
         data = get_kpis()
-        dev_sign = "+" if data["deviation_pct"] >= 0 else ""
+        sched_res = run_optimizer(data.get('contract_demand_kva', 250.0))
+        sched_sav = sched_res.get('monthly_saving_inr', 0)
+        sched_pct = sched_res.get('saving_pct', 0)
+
         if active_plant.source == "demo_baseline":
             drivers = (
-                "**Detected Drivers:**\n"
-                "1. Air Compressor: 4.2 kW idle run during non-production shifts (370 kWh waste)\n"
+                "**Detected Cost Drivers:**\n"
+                "1. Air Compressor: 4.2 kW idle run during non-production shifts\n"
                 "2. Hydraulic Press #3: Mechanical bearing degradation causing energy creep\n"
-                "3. ToD Tariff Timing: High furnace load during peak hours (₹8.20/kWh)"
+                f"3. Peak ToD Tariff: High energy use during peak evening hours (₹8.20/kWh)\n\n"
+                f"💡 Shifting loads to off-peak hours via the Scheduler can save approximately ₹{int(sched_sav):,}/month ({sched_pct}% of bill)."
             )
             sec_unit = "kWh/kg"
         else:
             sec_unit = "kWh/unit"
             drivers = (
                 f"**Detected Cost Drivers for {active_plant.plant_name}:**\n"
-                f"1. Peak ToD Tariff: Evening operational shift (18:00–22:00) billed at peak ₹8.20/kWh vs normal ₹6.20/kWh\n"
-                f"2. Machine Idling: CNC spindle idle & standby power during shift handovers (~250 kWh/mo waste)\n"
-                f"3. Power Factor: Healthy PF {data['power_factor']} (No APFC penalty incurred, ₹0 penalty)\n\n"
-                f"💡 Scheduler tab mein CP-SAT optimizer run karke ₹21,600/month (12.2% of bill) bachaye ja sakte hain!"
+                f"1. Peak ToD Tariff: Shifts scheduled during evening peak hours (18:00–22:00) billed at ₹8.20/kWh vs normal ₹6.20/kWh\n"
+                f"2. Machine Idling: Spindle idle and standby power draw during non-cutting intervals\n"
+                f"3. Power Factor: Measured PF {data['power_factor']} (Healthy — ₹0 penalty)\n\n"
+                f"💡 Shifting flexible machining batches via the Scheduler can save ₹{int(sched_sav):,}/month ({sched_pct}% of bill)."
             )
 
         pf_status_str = "✅ Healthy PF, No penalty" if data['power_factor'] >= 0.90 else f"⚠️ Penalty ₹{int(data['pf_penalty_inr']):,}"
+        tot_kwh_display = f"{data['total_kwh']:,.1f}" if (data['total_kwh'] % 1 != 0) else f"{int(data['total_kwh']):,}"
         return {
             "content": (
                 f"📈 **Consumption & Bill Analysis — {active_plant.plant_name}**\n\n"
                 f"• Data Source: **{data['data_source']}** ({active_plant.filename})\n"
-                f"• Total Consumption: **{int(data['total_kwh']):,} kWh**\n"
+                f"• Total Consumption: **{tot_kwh_display} kWh**\n"
                 f"• Total Electricity Bill: **₹{int(data['total_bill_inr']):,}** (Blended: ₹{data['blended_rate_inr_per_kwh']}/kWh)\n"
                 f"• Specific Energy: **{data['specific_energy_kwh_per_kg']} {sec_unit}**\n"
                 f"• Power Factor: **{data['power_factor']}** ({pf_status_str})\n\n"
                 f"{drivers}\n\n"
-                f"👉 Type 'anomalies' for machine-level alerts or 'scheduler' to view CP-SAT ToD shift savings."
+                f"👉 Type 'anomalies' to view operational alerts or 'scheduler' to view ToD shift savings."
             ),
             "tool_called": "get_kpis",
             "tool_result": data,
         }
 
-    # 6. Machine / Equipment / Saman breakdown query
+    # 6. Machine / Equipment breakdown query
     if any(k in q for k in ["saman", "equipment", "machine", "list", "load", "breakdown"]):
         data = get_kpis()
         mach_lines = "\n".join(
@@ -467,27 +472,28 @@ def _fallback_tool_router(query: str) -> Dict[str, Any]:
                 f"Total Active Machines: **{len(active_plant.machines)}**\n"
                 f"Total Monthly Consumption: **{active_plant.total_kwh:,.1f} kWh**\n\n"
                 f"{mach_lines}\n\n"
-                f"💡 Yeh breakdown aapke uploaded documents aur physics load factors ke hisab se dynamically calculate hua hai."
+                f"💡 This breakdown is estimated based on your uploaded equipment register and operational duty cycles."
             ),
             "tool_called": "get_kpis",
             "tool_result": data,
         }
 
     # 7. Energy summary / KPIs
-    if any(k in q for k in ["kpi", "bill", "energy", "consumption", "kwh", "power factor", "pf", "demand", "summary", "plant", "unit", "rupee", "cost", "overview"]):
+    if any(k in q for k in ["kpi", "bill", "energy", "consumption", "kwh", "demand", "summary", "plant", "unit", "rupee", "cost", "overview"]):
         data = get_kpis()
         dev_sign = "+" if data["deviation_pct"] >= 0 else ""
-        source_note = f" (Active: {active_plant.filename})" if active_plant.source != "demo_baseline" else " (Demo Baseline)"
+        source_note = f" (Active: {active_plant.filename})" if active_plant.source != "demo_baseline" else " (Sample Plant Demo)"
+        tot_kwh_display = f"{data['total_kwh']:,.1f}" if (data['total_kwh'] % 1 != 0) else f"{int(data['total_kwh']):,}"
         return {
             "content": (
                 f"⚡ **{data['plant']}{source_note}**\n\n"
                 f"• Data Source: **{data['data_source']}** ({active_plant.filename})\n"
-                f"• Total Consumption: **{data['total_kwh']:,} kWh**\n"
-                f"• Total Electricity Bill: **₹{data['total_bill_inr']:,}** (Blended: ₹{data['blended_rate_inr_per_kwh']}/kWh)\n"
-                f"• Specific Energy: **{data['specific_energy_kwh_per_kg']} kWh/kg** (Baseline: {data['baseline_specific_energy']}, **{dev_sign}{data['deviation_pct']}%**)\n"
-                f"• Power Factor: **{data['power_factor']}** (Penalty: **₹{data['pf_penalty_inr']:,}**)\n\n"
-                f"**Quick Actions:**\n"
-                f"1. Type 'scheduler' to view CP-SAT ToD savings\n"
+                f"• Total Consumption: **{tot_kwh_display} kWh**\n"
+                f"• Total Electricity Bill: **₹{int(data['total_bill_inr']):,}** (Blended: ₹{data['blended_rate_inr_per_kwh']}/kWh)\n"
+                f"• Specific Energy: **{data['specific_energy_kwh_per_kg']} kWh/unit** (Baseline: {data['baseline_specific_energy']}, **{dev_sign}{data['deviation_pct']}%**)\n"
+                f"• Power Factor: **{data['power_factor']}** (Penalty: **₹{int(data['pf_penalty_inr']):,}**)\n\n"
+                f"**Available Actions:**\n"
+                f"1. Type 'scheduler' to view ToD shift savings\n"
                 f"2. Type 'anomalies' to view operational waste alerts\n"
                 f"3. Type 'equipment' to view machine disaggregation"
             ),
@@ -496,29 +502,28 @@ def _fallback_tool_router(query: str) -> Dict[str, Any]:
         }
 
     # 8. Greetings & Menu
-    if any(k in q for k in ["hi", "hello", "namaste", "help", "menu", "kya kar", "start", "kaise"]):
+    if any(k in q for k in ["hi", "hello", "help", "menu", "start", "how"]):
         return {
             "content": (
-                f"Namaste! 🙏 Main **{active_plant.plant_name}** ka AI Copilot hun.\n\n"
-                f"Main aapke plant ({len(active_plant.machines)} machines, {active_plant.total_kwh:,.0f} kWh) ke analytical tools execute karke instant answers deta hun:\n"
-                "1. 📊 `kpi` — Total consumption & bill analysis\n"
-                "2. ⚙️ `equipment` — Machine-level disaggregation\n"
-                "3. ⚠️ `anomalies` — Operational waste detection\n"
-                "4. 🚀 `scheduler` — Google OR-Tools CP-SAT ToD tariff optimization\n"
-                "5. 🌿 `carbon` — Scope 1 & 2 GHG Protocol audit\n\n"
-                "Aap mujhse seedhe pooch sakte hain, jaise: *'Bill kyun badha?'* ya *'Machine list dikhao'*!"
+                f"Hello! 👋 I am the UrjaMind AI Copilot for **{active_plant.plant_name}**.\n\n"
+                f"I analyze your plant ({len(active_plant.machines)} machines, {active_plant.total_kwh:,.0f} kWh) with verified analytical modules:\n"
+                "1. 📊 `kpi` — Total consumption and electricity bill breakdown\n"
+                "2. ⚙️ `equipment` — Machine-level load disaggregation\n"
+                "3. ⚠️ `anomalies` — Operational waste and idle power detection\n"
+                "4. 🚀 `scheduler` — ToD tariff shift optimization\n"
+                "5. 🌿 `carbon` — Scope 1 & 2 GHG Protocol carbon accounting\n\n"
+                "Ask me anything, such as: *'Why did my bill increase?'* or *'What is my power factor?'*"
             ),
             "tool_called": None,
             "tool_result": None,
         }
 
-    # 7. Out-of-domain query rejection
+    # 9. Out-of-domain query rejection
     return {
         "content": (
             "⚠️ **Out of Scope Query**\n\n"
-            "Main sirf UrjaMind factory energy data, machine telemetry, ToD tariffs aur carbon compliance ke baare mein madad kar sakta hun. "
-            "General knowledge, coding, ya unrelated sawaalon ka jawab mere domain mein nahi hai.\n\n"
-            "Aap bijli bill, machine waste ya tariff optimization ke baare mein pooch sakte hain!"
+            "I can only assist with factory energy management, electricity bills, equipment telemetry, ToD tariffs, and carbon compliance. "
+            "Please ask a question related to your facility's energy consumption or savings!"
         ),
         "tool_called": None,
         "tool_result": None,

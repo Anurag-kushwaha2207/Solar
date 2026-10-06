@@ -15,10 +15,10 @@ ALERTS = [
         "machine": "Air Compressor (75 kW)",
         "alert_type": "idle_waste",
         "severity": "high",
-        "title": "Idle Compressor — Raat 11 PM se 3 AM",
+        "title": "Idle Compressor — Overnight 11 PM to 3 AM",
         "description": (
             "Physics model: 4.2 kW idle draw × ~4h × 22 nights = 370 kWh/month wasted. "
-            "Compressor chal raha hai jab production zero hai."
+            "Compressor operating while production is idle."
         ),
         "potential_saving_inr": ANOMALY_SAVING_COMPRESSOR_INR,
         "potential_saving_kwh": 370,
@@ -126,7 +126,7 @@ async def get_alerts(plant_id: int = 1, severity: str = None):
             "alert_type": "idle_waste",
             "severity": "medium",
             "title": f"Standby Draw — {cnc1}",
-            "description": f"Standby power draw recorded during shift handovers on {cnc1} (~110 kWh/month).",
+            "description": f"Standby power draw estimated during shift handovers on {cnc1} (~110 kWh/month).",
             "potential_saving_inr": 920,
             "potential_saving_kwh": 110,
             "method": "physics-simulation",

@@ -58,7 +58,7 @@ function Navbar() {
               {user.photoURL ? (
                 <img src={user.photoURL} alt="User" style={{width:30, height:30, borderRadius:'50%'}} />
               ) : (
-                <span style={{background:'rgba(59,158,255,0.2)', padding:'4px 8px', borderRadius:20, fontSize:12}}>👤</span>
+                <span style={{background:'rgba(34,197,94,0.15)', padding:'4px 8px', borderRadius:20, fontSize:12}}>👤</span>
               )}
               <span style={{fontSize:13, fontWeight:600, color:'var(--text)'}}>
                 {user.displayName ? user.displayName.split(' ')[0] : 'Manager'}
@@ -74,7 +74,7 @@ function Navbar() {
             <button
               onClick={handleAuth}
               disabled={authLoading}
-              style={{background:'rgba(59,158,255,0.15)', border:'1px solid rgba(59,158,255,0.3)', color:'var(--blue-light)', borderRadius:8, padding:'6px 12px', fontSize:12, fontWeight:600, cursor:'pointer', display:'flex', alignItems:'center', gap:4}}
+              style={{background:'rgba(34,197,94,0.12)', border:'1px solid rgba(34,197,94,0.3)', color:'var(--primary)', borderRadius:8, padding:'6px 12px', fontSize:12, fontWeight:600, cursor:'pointer', display:'flex', alignItems:'center', gap:4}}
             >
               🔥 {authLoading ? 'Connecting...' : 'Firebase Login'}
             </button>
@@ -102,9 +102,9 @@ export default function App() {
         position="bottom-right"
         toastOptions={{
           style: {
-            background: '#0d1a2e',
-            color: '#e8f4fd',
-            border: '1px solid rgba(99,179,237,0.25)',
+            background: 'var(--surface, #0b2a1f)',
+            color: 'var(--text, #ecfdf5)',
+            border: '1px solid var(--border, rgba(255,255,255,0.1))',
             borderRadius: '12px',
             fontSize: '14px',
           }

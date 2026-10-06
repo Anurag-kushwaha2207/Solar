@@ -238,5 +238,42 @@ async def load_demo(plant_id: str = "1"):
         },
         "total_kwh": SEP_TOTAL_KWH,
         "period": "Sep 2026",
-        "message": "✅ Rajkot Foundry demo dataset active (48,240 kWh baseline).",
+        "message": "✅ Sample plant baseline loaded (48,240 kWh).",
     }
+
+
+@router.get("/file-status")
+async def get_file_status():
+    """Returns processing status for each data source category and any interval mismatch notices."""
+    return {
+        "file_statuses": active_plant.file_statuses,
+        "interval_warning": active_plant.interval_warning,
+        "spot_load_readings": active_plant.spot_load_readings,
+        "production_extrapolation": active_plant.production_extrapolation,
+        "has_real_baseline": active_plant.has_real_baseline,
+    }
+
+
+@router.get("/template/interval-csv")
+async def get_interval_template():
+    """Generates and downloads a standardized 96-slot 15-minute interval data CSV template."""
+    from fastapi.responses import Response
+    lines = ["timestamp,load_kw,power_factor"]
+    import datetime
+    base_date = datetime.date.today()
+    for slot in range(96):
+        total_mins = slot * 15
+        h = total_mins // 60
+        m = total_mins % 60
+        ts = f"{base_date} {h:02d}:{m:02d}:00"
+        # Sample plausible load
+        sample_kw = 45.0 if 8 <= h < 20 else 8.5
+        lines.append(f"{ts},{sample_kw:.1f},0.92")
+    csv_content = "\n".join(lines)
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=urjamind_interval_template_96slot.csv"}
+    )
+
+
