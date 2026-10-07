@@ -47,6 +47,7 @@ def test_abc_uploaded_suite():
         assert kpis['kpis']['total_kwh'] == 18450
         assert kpis['kpis']['avg_power_factor'] == 0.94
         assert kpis['kpis']['pf_penalty_inr'] == 0
+        assert kpis['kpis']['max_demand_kva'] == 285.0, f"Max demand was {kpis['kpis']['max_demand_kva']}, expected 285.0 (billed MD)"
 
         base_trend = await get_baseline_trend()
         print('Baseline unit:', base_trend['unit'], 'Baseline val:', base_trend['baseline_kwh_per_kg'])
@@ -69,6 +70,7 @@ def test_abc_uploaded_suite():
         assert not any('Furnace' in j['job_name'] for j in sched_jobs['jobs'])
         assert sched_jobs['saving_inr_month'] == 20239.0
         assert round(sched_jobs['saving_pct'], 1) == 11.5
+        assert sched_jobs['disclaimer'] == 'Illustrative estimate based on a standard shift pattern'
 
         methods = await compare_methods(285)
         print('Methods:', methods['methods'])
@@ -83,6 +85,8 @@ def test_abc_uploaded_suite():
         print('Scope 1:', carb['scope1']['total_tco2e'], 'Scope 2:', carb['scope2']['total_tco2e'])
         assert carb['scope1']['total_tco2e'] == 0.0
         assert carb['scope2']['total_tco2e'] == 13.21
+        print('Carbon intensity:', carb['combined']['intensity_kg_per_kg'])
+        assert carb['combined']['intensity_kg_per_kg'] == 0.888, f"Carbon intensity was {carb['combined']['intensity_kg_per_kg']}, expected 0.888 (~0.89 kgCO2e/unit)!"
         tod_mv = [m for m in carb['mv_table'] if 'ToD' in m['name'] or 'Shift' in m['name']][0]
         print('Carbon ToD saving INR:', tod_mv['saving_inr'])
         assert tod_mv['saving_inr'] == 20239.0
@@ -107,5 +111,51 @@ def test_abc_uploaded_suite():
     asyncio.run(_run())
 
 
+def test_xyz_no_equipment_sample_state():
+    async def _run():
+        plant = active_plant.get_plant()
+        plant.company_name = 'XYZ Plastics Pvt. Ltd.'
+        plant.plant_name = 'XYZ Plastics Pvt. Ltd.'
+        plant.source = 'user_uploaded_bill_ocr'
+        plant.filename = 'xyz_plastics_bill.pdf'
+        plant.total_kwh = 24000.0
+        plant.total_bill_inr = 210000.0
+        plant.avg_pf = 0.92
+        plant.max_demand_kva = 240.0
+        plant.contract_kva = 240.0
+        plant.equipment_list = []  # No equipment register uploaded!
+        plant.recalculate_machine_energy()
+
+        # 1. Alerts check
+        alerts_res = await get_alerts()
+        assert alerts_res['has_equipment'] is False
+        assert alerts_res['is_sample_profile'] is True
+        assert 'Upload your equipment register' in alerts_res['profile_notice']
+        for a in alerts_res['alerts']:
+            if a.get('machine') != 'Capacitor Bank / Main Incomer':
+                assert a['is_sample_profile'] is True
+                assert a['badge'] == 'Sample profile'
+
+        # 2. KPIs check
+        kpis = await get_kpis()
+        assert kpis['has_equipment'] is False
+        assert kpis['is_sample_profile'] is True
+        assert 'Upload your equipment register' in kpis['profile_notice']
+        assert kpis['kpis']['max_demand_kva'] == 240.0
+
+        # 3. Scheduler check
+        sched_res = await get_jobs()
+        assert sched_res['has_equipment'] is False
+        assert sched_res['is_sample_profile'] is True
+        assert 'Upload your equipment register' in sched_res['profile_notice']
+        assert sched_res['disclaimer'] == 'Illustrative estimate based on a standard shift pattern'
+        for j in sched_res['jobs']:
+            assert j['is_sample_profile'] is True
+            assert j['badge'] == 'Sample profile'
+
+    asyncio.run(_run())
+
+
 if __name__ == "__main__":
     test_abc_uploaded_suite()
+    test_xyz_no_equipment_sample_state()

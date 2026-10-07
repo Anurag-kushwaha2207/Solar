@@ -330,6 +330,8 @@ def solve_cpsat(
 
 
 def _build_result(jobs, solver, start_vars, solve_time, status_name, method, max_demand_kva, md_kw):
+    from active_data import active_plant
+    has_equipment = (len(active_plant.equipment_list) > 0) or (active_plant.source == "demo_baseline")
     result_jobs = []
     cur_cost = opt_cost = 0.0
     daily_kwh = 0.0
@@ -363,6 +365,8 @@ def _build_result(jobs, solver, start_vars, solve_time, status_name, method, max
             "tariff_shift":     _tariff_period(cur_s) + " to " + _tariff_period(opt_s),
             "job_saving_inr":   round(c_c - o_c, 1),
             "saving_inr":       round(c_c - o_c, 1),
+            "is_sample_profile": not has_equipment,
+            "badge":            "Sample profile" if not has_equipment else None,
         })
 
     saving_day = round(cur_cost - opt_cost, 2)
@@ -451,6 +455,8 @@ def _fallback_greedy(jobs, max_demand_kva, solve_time=0.0, status_name="GREEDY_H
             slot_kw[t] += j.power_kw
 
     # Format result jobs preserving original order
+    from active_data import active_plant
+    has_equipment = (len(active_plant.equipment_list) > 0) or (active_plant.source == "demo_baseline")
     result_jobs = []
     cur_cost = opt_cost = daily_kwh = 0.0
     for i, j in enumerate(jobs):
@@ -481,6 +487,8 @@ def _fallback_greedy(jobs, max_demand_kva, solve_time=0.0, status_name="GREEDY_H
             "tariff_shift":     _tariff_period(cur_s) + " to " + _tariff_period(opt_s),
             "job_saving_inr":   round(c_c - o_c, 1),
             "saving_inr":       round(c_c - o_c, 1),
+            "is_sample_profile": not has_equipment,
+            "badge":            "Sample profile" if not has_equipment else None,
         })
 
     saving_day = round(cur_cost - opt_cost, 2)

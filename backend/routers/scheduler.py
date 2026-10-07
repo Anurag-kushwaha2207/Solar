@@ -32,9 +32,17 @@ async def get_jobs(plant_id: int = 1):
     jobs = _current_jobs()
     default_md = float(getattr(active_plant, "contract_kva", 250.0) or 250.0)
     result = solve_cpsat(jobs, max_demand_kva=default_md, time_limit_s=5.0)
+    has_equipment = (len(active_plant.equipment_list) > 0) or (active_plant.source == "demo_baseline")
     return {
-        "ortools_available": ORTOOLS_AVAILABLE,
-        "jobs": result.jobs,
+        "plant":                 active_plant.plant_name,
+        "contract_kva":          default_md,
+        "is_custom":             active_plant.source != "demo_baseline",
+        "has_equipment":         has_equipment,
+        "is_sample_profile":     not has_equipment,
+        "profile_notice":        f"Upload your equipment register to see machine-level results for {active_plant.plant_name}" if not has_equipment else None,
+        "disclaimer":            "Illustrative estimate based on a standard shift pattern",
+        "ortools_available":     ORTOOLS_AVAILABLE,
+        "jobs":                  result.jobs,
         "current_cost_inr_day":  result.current_cost_inr,
         "optimal_cost_inr_day":  result.optimal_cost_inr,
         "saving_inr_day":        result.saving_inr_day,
@@ -59,6 +67,7 @@ async def optimize(req: ScheduleRequest):
     else:
         result = solve_cpsat(jobs, max_demand_kva=md, time_limit_s=5.0)
 
+    has_equipment = (len(active_plant.equipment_list) > 0) or (active_plant.source == "demo_baseline")
     return {
         "method":            result.method,
         "ortools_available": ORTOOLS_AVAILABLE,
@@ -66,6 +75,12 @@ async def optimize(req: ScheduleRequest):
         "solver_status":     result.solver_status,
         "solve_time_s":      result.solve_time_s,
         "optimized_jobs":    result.jobs,
+        "plant":             active_plant.plant_name,
+        "is_custom":         active_plant.source != "demo_baseline",
+        "has_equipment":     has_equipment,
+        "is_sample_profile": not has_equipment,
+        "profile_notice":    f"Upload your equipment register to see machine-level results for {active_plant.plant_name}" if not has_equipment else None,
+        "disclaimer":        "Illustrative estimate based on a standard shift pattern",
         "current_cost_inr":  result.current_cost_inr,
         "optimal_cost_inr":  result.optimal_cost_inr,
         "saving_inr_day":    result.saving_inr_day,
@@ -73,10 +88,7 @@ async def optimize(req: ScheduleRequest):
         "saving_pct":        result.saving_pct,
         "peak_kva":          result.peak_demand_kva,
         "md_respected":      result.md_respected,
-        "note":              (
-            "REAL CP-SAT result from Google OR-Tools." if ("CP-SAT" in result.method and ORTOOLS_AVAILABLE)
-            else "Greedy heuristic schedule."
-        ),
+        "note":              "Illustrative estimate based on a standard shift pattern.",
     }
 
 

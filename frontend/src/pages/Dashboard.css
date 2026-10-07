@@ -4,7 +4,7 @@
 .time-tabs { display:flex; gap:4px; background:var(--surface); border-radius:10px; padding:4px; border:1px solid var(--border); }
 .time-tab { padding:6px 14px; border-radius:7px; font-size:13px; font-weight:600; color:var(--text2); background:transparent; border:none; cursor:pointer; transition:all 0.2s; }
 .time-tab-active { background:var(--primary); color:#04130d; }
-.kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:20px; }
+.kpi-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px; margin-bottom:20px; }
 @media(max-width:900px){.kpi-grid{grid-template-columns:1fr 1fr}.dash-layout{grid-template-columns:1fr}}
 .charts-row { display:flex; gap:16px; margin-bottom:20px; flex-wrap:wrap; }
 .alerts-list { display:flex; flex-direction:column; gap:10px; margin-bottom:24px; }

@@ -78,10 +78,13 @@ async def get_alerts(plant_id: int = 1, severity: str = None):
     # Dynamic alerts for uploaded plant
     dyn_alerts = []
     aid = 1
+    has_equipment = len(active_plant.equipment_list) > 0
     m_keys = list(active_plant.machines.keys())
     has_cnc = any("cnc" in m.lower() for m in m_keys)
     has_compressor = any("compressor" in m.lower() for m in m_keys)
     has_press = any("press" in m.lower() for m in m_keys)
+
+    sample_badge = "Sample profile" if not has_equipment else None
 
     if has_compressor:
         dyn_alerts.append({
@@ -90,13 +93,15 @@ async def get_alerts(plant_id: int = 1, severity: str = None):
             "alert_type": "idle_waste",
             "severity": "high",
             "title": "Idle Compressor — Non-production Shifts",
-            "description": "Compressor idling detected during non-productive hours.",
+            "description": "Compressor idling detected during non-productive hours." if has_equipment else "Sample profile estimate: Compressor idling during non-productive hours.",
             "potential_saving_inr": 4200,
             "potential_saving_kwh": 350,
             "method": "physics-simulation",
             "confidence": None,
             "action": "Install auto-shutoff timer relay.",
-            "note": "Verify with current ampere readings.",
+            "note": "Verify with current ampere readings." if has_equipment else f"Sample profile: Upload equipment register for {active_plant.plant_name} to calibrate machine alerts.",
+            "is_sample_profile": not has_equipment,
+            "badge": sample_badge,
         })
         aid += 1
 
@@ -107,13 +112,15 @@ async def get_alerts(plant_id: int = 1, severity: str = None):
             "alert_type": "degradation",
             "severity": "medium",
             "title": "Mechanical Resistance / Degradation",
-            "description": "Specific energy creep indicates bearing wear or lubrication deficit.",
+            "description": "Specific energy creep indicates bearing wear or lubrication deficit." if has_equipment else "Sample profile estimate: Mechanical energy creep indicates bearing wear.",
             "potential_saving_inr": 2800,
             "potential_saving_kwh": 260,
             "method": "physics-simulation",
             "confidence": None,
             "action": "Schedule mechanical inspection and lubrication.",
-            "note": "Confirm with load cycle logs.",
+            "note": "Confirm with load cycle logs." if has_equipment else f"Sample profile: Upload equipment register for {active_plant.plant_name} to calibrate machine alerts.",
+            "is_sample_profile": not has_equipment,
+            "badge": sample_badge,
         })
         aid += 1
 
@@ -133,6 +140,8 @@ async def get_alerts(plant_id: int = 1, severity: str = None):
             "confidence": None,
             "action": "Configure auto-standby power saving mode in machine controller.",
             "note": "Illustrative estimate (assumed 110 kWh) — verify with physical machine logging before acting.",
+            "is_sample_profile": not has_equipment,
+            "badge": sample_badge,
         })
         aid += 1
 
@@ -149,6 +158,8 @@ async def get_alerts(plant_id: int = 1, severity: str = None):
             "confidence": None,
             "action": "Enforce operator SOP for spindle cut-off during part loading/unloading.",
             "note": "Illustrative estimate (assumed 140 kWh) — verify with physical machine logging before acting.",
+            "is_sample_profile": not has_equipment,
+            "badge": sample_badge,
         })
         aid += 1
 
@@ -168,6 +179,8 @@ async def get_alerts(plant_id: int = 1, severity: str = None):
             "confidence": None,
             "action": "Inspect APFC panel and replace degraded capacitor steps.",
             "note": "Derived directly from monthly electricity bill.",
+            "is_sample_profile": False,
+            "badge": None,
         })
 
     filtered = [a for a in dyn_alerts if severity is None or a["severity"] == severity]
@@ -177,7 +190,10 @@ async def get_alerts(plant_id: int = 1, severity: str = None):
         "plant_id": plant_id,
         "total_alerts": len(filtered),
         "total_potential_saving_inr": tot_save,
-        "model": "Physics simulation + uploaded telemetry baselining.",
+        "has_equipment": has_equipment,
+        "is_sample_profile": not has_equipment,
+        "profile_notice": f"Upload your equipment register to see machine-level results for {active_plant.plant_name}" if not has_equipment else None,
+        "model": "Physics simulation + uploaded telemetry baselining." if has_equipment else "Sample profile (illustrative) — upload equipment register for plant-specific results.",
         "alerts": filtered,
         "note": f"Alerts tuned for {active_plant.plant_name} equipment and measured PF {active_plant.avg_pf}.",
     }

@@ -25,8 +25,14 @@ async def get_report(plant_id: int = 1):
 
     sep_scope1 = SEP_SCOPE1_TCO2E if is_demo else 0.0
     sep_total = round(sep_scope2 + sep_scope1, 2)
-    prod_units = active_plant.production_kg if active_plant.production_kg > 0 else (SEP_PRODUCTION_KG if is_demo else 1.0)
-    sep_intensity = round(sep_total * 1000 / prod_units, 3)
+    if is_demo:
+        prod_units = active_plant.production_kg if active_plant.production_kg > 0 else SEP_PRODUCTION_KG
+        sep_intensity = round(sep_total * 1000 / prod_units, 3)
+    else:
+        # Both energy and production must share the same timeframe:
+        # Specific energy (kWh/unit) × grid emission factor (0.716 kgCO2e/kWh) = ~0.888 kgCO2e/unit
+        sec = active_plant.specific_energy if active_plant.specific_energy > 0 else (current_kwh / max(1.0, active_plant.production_kg))
+        sep_intensity = round(sec * CEA_EMISSION_FACTOR_KG_PER_KWH, 3)
 
     from cpsat_scheduler import get_plant_jobs, solve_cpsat
     scale = active_plant.total_kwh / max(1.0, float(SEP_TOTAL_KWH)) if is_demo else 1.0
@@ -195,7 +201,8 @@ async def intensity_trend():
     current_kwh = active_plant.total_kwh
     sep_scope2 = round(current_kwh * CEA_EMISSION_FACTOR_KG_PER_KWH / 1000, 2)
     if active_plant.source != "demo_baseline":
-        intensity = round(sep_scope2 * 1000 / max(1.0, active_plant.production_kg), 2)
+        sec = active_plant.specific_energy if active_plant.specific_energy > 0 else (current_kwh / max(1.0, active_plant.production_kg))
+        intensity = round(sec * CEA_EMISSION_FACTOR_KG_PER_KWH, 2)
         return {
             "months": [active_plant.billing_period],
             "intensity": [intensity],

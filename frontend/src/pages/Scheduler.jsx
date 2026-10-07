@@ -35,16 +35,20 @@ function TariffHeatmap() {
   )
 }
 
-function GanttBar({ job, optimized }) {
+function GanttBar({ job, optimized, isSampleProfile }) {
   const s = optimized ? (job.optimal_start ?? job.current_start) : job.current_start
   const e = optimized ? (job.optimal_end ?? job.current_end) : job.current_end
   const left = `${(s || 0) * 100}%`
   const width = `${Math.max(1, ((e || 0) - (s || 0)) * 100)}%`
   const cls = job.is_flexible ? (optimized ? 'gantt-bar-opt' : 'gantt-bar-cur') : 'gantt-bar-fixed'
   const saving = job.saving_inr ?? job.job_saving_inr ?? 0
+  const isSample = job.is_sample_profile || isSampleProfile || job.badge === 'Sample profile'
   return (
     <div className="gantt-row">
-      <div className="gantt-job-name">{job.job_name}</div>
+      <div className="gantt-job-name" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+        <span>{job.job_name}</span>
+        {isSample && <span className="badge badge-amber" style={{ fontSize: 9, padding: '1px 5px' }}>Sample</span>}
+      </div>
       <div className="gantt-constraint">{job.constraint}</div>
       <div className="gantt-track">
         {/* Peak zone indicator */}
@@ -136,11 +140,11 @@ export default function Scheduler() {
       setCostData(genCostData(res.current_cost_inr || 4138, res.optimal_cost_inr || 3274))
       const rowSum = (res.optimized_jobs || []).reduce((acc, j) => acc + Math.round((j.saving_inr ?? j.job_saving_inr ?? 0) * 25), 0)
       const finalSaving = rowSum > 0 ? rowSum : (res.saving_inr_month || 0)
-      toast.success(`✅ Optimized (${res.method})! Estimated saving: ₹${Math.round(finalSaving).toLocaleString()}/month`)
+      toast.success(`✅ Optimized (${res.method})! Illustrative saving: ₹${Math.round(finalSaving).toLocaleString()}/month`)
     } catch {
       const rowSum = jobs.reduce((acc, j) => acc + Math.round((j.saving_inr ?? j.job_saving_inr ?? 0) * 25), 0)
       const fallbackSaving = rowSum > 0 ? rowSum : (result?.saving_inr_month ?? 20239)
-      toast.success(`✅ Optimized! (${method === 'greedy' ? 'Greedy' : 'CP-SAT'} solver) — Saving: ₹${fallbackSaving.toLocaleString()}/month`)
+      toast.success(`✅ Optimized! (${method === 'greedy' ? 'Greedy' : 'CP-SAT'} solver) — Illustrative saving: ₹${fallbackSaving.toLocaleString()}/month`)
       setCostData(genCostData(4138, 3274))
     } finally {
       setOptimizing(false)
@@ -156,7 +160,9 @@ export default function Scheduler() {
   const monthlySaving = computedRowsSum > 0 ? computedRowsSum : Math.round(result?.saving_inr_month ?? 20239)
   const savingPct = result?.saving_pct ?? 11.5
 
-  const bannerDesc = `CP-SAT mathematical optimizer shifted flexible batches away from evening peak tariff hours (₹8.20/kWh) into off-peak / normal hours. Contract Max Demand limit (${maxMD} kVA) respected.`
+  const bannerDesc = `Illustrative estimate based on a standard shift pattern. CP-SAT mathematical optimizer shifted flexible batches away from evening peak tariff hours (₹8.20/kWh) into off-peak / normal hours. Contract Max Demand limit (${maxMD} kVA) respected.`
+
+  const isSampleProfile = (!result?.has_equipment && result?.is_custom)
 
   return (
     <div className="page">
@@ -174,18 +180,40 @@ export default function Scheduler() {
           </button>
         </div>
 
+        {/* Illustrative Shift Pattern Disclaimer / Notice */}
+        <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 12, padding: '12px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 20 }}>ℹ️</span>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--warn)' }}>
+                Illustrative estimate based on a standard shift pattern
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>
+                {isSampleProfile
+                  ? `Upload your equipment register to see machine-level results for ${result?.plant || 'your plant'}. Jobs are currently using standard equipment templates.`
+                  : 'Savings are illustrative model projections across standard ToD tariff windows, not an audited production schedule.'}
+              </div>
+            </div>
+          </div>
+          {isSampleProfile && (
+            <a href="/upload" className="btn btn-secondary" style={{ padding: '6px 14px', fontSize: 12, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+              Upload Equipment →
+            </a>
+          )}
+        </div>
+
         {/* Saving Banner */}
         <div className="saving-banner">
           <div className="saving-item">
             <div className="saving-val" style={{ color: 'var(--primary)' }}>
               ₹{monthlySaving.toLocaleString()}
             </div>
-            <div className="saving-label">Estimated monthly saving</div>
+            <div className="saving-label">Illustrative monthly saving</div>
           </div>
           <div className="saving-div" />
           <div className="saving-item">
             <div className="saving-val" style={{ color: 'var(--accent-lime)' }}>{savingPct}%</div>
-            <div className="saving-label">Energy cost reduction</div>
+            <div className="saving-label">Illustrative bill reduction</div>
           </div>
           <div className="saving-div" />
           <div className="saving-item">
@@ -227,7 +255,7 @@ export default function Scheduler() {
               {loading ? (
                 Array.from({ length: 4 }).map((_, i) => <div key={i} className="loading-skeleton" style={{ height: 44, borderRadius: 10, marginBottom: 6 }} />)
               ) : (
-                jobs.map((j, idx) => <GanttBar key={j.id || idx} job={j} optimized={optimized} />)
+                jobs.map((j, idx) => <GanttBar key={j.id || idx} job={j} optimized={optimized} isSampleProfile={isSampleProfile} />)
               )}
             </div>
 

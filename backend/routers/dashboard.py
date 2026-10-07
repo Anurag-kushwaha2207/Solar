@@ -27,6 +27,10 @@ def get_tariff_rate(hour: int) -> float:
 @router.get("/kpis")
 async def get_kpis(plant_id: int = 1):
     from active_data import active_plant
+    # Bill's Maximum Demand takes priority for billing KPI
+    bill_md = round(float(getattr(active_plant, "max_demand_kva", 0.0) or getattr(active_plant, "contract_kva", 0.0) or 250.0), 1)
+    observed_peak_kva = round(active_plant.peak_kw / max(0.01, active_plant.avg_pf), 1)
+    has_equipment = (len(active_plant.equipment_list) > 0) or (active_plant.source == "demo_baseline")
     return {
         "plant":   active_plant.plant_name,
         "period":  active_plant.billing_period,
@@ -34,10 +38,16 @@ async def get_kpis(plant_id: int = 1):
         "tier":    2,
         "data_source": f"Active: {active_plant.source} ({active_plant.filename})",
         "is_custom": active_plant.source != "demo_baseline",
+        "has_equipment": has_equipment,
+        "is_sample_profile": not has_equipment,
+        "equipment_count": len(active_plant.equipment_list),
+        "profile_notice": f"Upload your equipment register to see machine-level results for {active_plant.plant_name}" if not has_equipment else None,
         "kpis": {
             "total_kwh":          active_plant.total_kwh,
             "total_kvah":         round(active_plant.total_kwh / max(0.01, active_plant.avg_pf), 1),
-            "max_demand_kva":     round(active_plant.peak_kw / max(0.01, active_plant.avg_pf), 1),
+            "max_demand_kva":     bill_md,
+            "observed_peak_kva":  observed_peak_kva,
+            "observed_peak_kw":   active_plant.peak_kw,
             "specific_energy":    active_plant.specific_energy,
             "avg_power_factor":   active_plant.avg_pf,
             "pf_penalty_inr":     round(active_plant.pf_penalty_inr, 0) if active_plant.avg_pf < 0.90 else 0,
@@ -60,6 +70,7 @@ async def get_kpis(plant_id: int = 1):
 async def get_machine_breakdown(plant_id: int = 1):
     from active_data import active_plant
     total = active_plant.total_kwh
+    has_equipment = (len(active_plant.equipment_list) > 0) or (active_plant.source == "demo_baseline")
     machines = []
     status_map = {
         "Air Compressor (75 kW)": "idle_waste",
@@ -79,20 +90,25 @@ async def get_machine_breakdown(plant_id: int = 1):
             m_status = status_map.get(m, "normal")
 
         machines.append({
-            "machine":   m,
-            "kwh":       round(kwh, 1),
-            "share_pct": round(kwh / max(1.0, total) * 100, 1),
-            "avg_pf":    round(active_plant.avg_pf * (0.95 if "furnace" in m_lower else 0.98), 2),
-            "status":    m_status,
+            "machine":           m,
+            "kwh":               round(kwh, 1),
+            "share_pct":         round(kwh / max(1.0, total) * 100, 1),
+            "avg_pf":            round(active_plant.avg_pf * (0.95 if "furnace" in m_lower else 0.98), 2),
+            "status":            m_status,
+            "is_sample_profile": not has_equipment,
+            "badge":             "Sample profile" if not has_equipment else None,
         })
     return {
         "period":               active_plant.billing_period,
         "plant":                active_plant.plant_name,
         "total_kwh":            total,
+        "has_equipment":        has_equipment,
+        "is_sample_profile":    not has_equipment,
+        "profile_notice":       f"Upload your equipment register to see machine-level results for {active_plant.plant_name}" if not has_equipment else None,
         "machines":             machines,
         "top_waste_machine":    machines[0]["machine"] if machines else "Main Load",
         "potential_saving_inr": round(active_plant.total_bill_inr * 0.042, 0),
-        "note":                 f"Machine-level breakdown for {active_plant.plant_name}: {len(machines)} machines active.",
+        "note":                 f"Machine-level breakdown for {active_plant.plant_name}: {len(machines)} machines active." if has_equipment else f"Sample profile: Upload equipment register for {active_plant.plant_name} to calibrate machine inventory.",
     }
 
 
