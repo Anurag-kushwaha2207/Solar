@@ -185,13 +185,15 @@ async def upload_meter_data(file: UploadFile = File(...), plant_id: str = Form("
     if result.get("success"):
         return {
             "status": "processed",
-            "mode": "data_parsed",
+            "mode": result.get("mode", "data_parsed"),
             "file": file.filename,
-            "rows_detected": result["rows"],
-            "total_kwh": result["total_kwh"],
-            "peak_kw": result["peak_kw"],
-            "avg_pf": result["avg_pf"],
-            "specific_energy": result["specific_energy"],
+            "file_status": result.get("file_status", "Parsed"),
+            "rows_detected": result.get("rows"),
+            "total_kwh": result.get("total_kwh") or result.get("monthly_kwh_estimated"),
+            "peak_kw": result.get("peak_kw"),
+            "avg_pf": result.get("avg_pf"),
+            "specific_energy": result.get("specific_energy"),
+            "warning": result.get("warning"),
             "data_tier": 2,
             "message": result["message"],
         }
@@ -201,7 +203,7 @@ async def upload_meter_data(file: UploadFile = File(...), plant_id: str = Form("
         "mode": "demo_values_used",
         "file": file.filename,
         "reason": result.get("reason", "Could not parse interval data columns"),
-        "message": "File received but not recognized as interval CSV — demo baseline values retained.",
+        "message": "File received but not recognized as interval data — demo baseline values retained.",
         "total_kwh": SEP_TOTAL_KWH,
         "data_tier": 2,
     }

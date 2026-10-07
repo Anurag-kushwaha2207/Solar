@@ -126,13 +126,13 @@ async def get_alerts(plant_id: int = 1, severity: str = None):
             "alert_type": "idle_waste",
             "severity": "medium",
             "title": f"Standby Draw — {cnc1}",
-            "description": f"Standby power draw estimated during shift handovers on {cnc1} (~110 kWh/month).",
+            "description": f"Illustrative estimate (assumed 110 kWh): Standby power draw during shift handovers on {cnc1}.",
             "potential_saving_inr": 920,
             "potential_saving_kwh": 110,
             "method": "physics-simulation",
             "confidence": None,
             "action": "Configure auto-standby power saving mode in machine controller.",
-            "note": "Controller sleep parameter can be adjusted in settings.",
+            "note": "Illustrative estimate (assumed 110 kWh) — verify with physical machine logging before acting.",
         })
         aid += 1
 
@@ -142,13 +142,13 @@ async def get_alerts(plant_id: int = 1, severity: str = None):
             "alert_type": "idle_waste",
             "severity": "low",
             "title": f"Spindle Idling — {cnc3}",
-            "description": f"Inter-batch spindle idle rotation between machining cycles on {cnc3} (~140 kWh/month).",
+            "description": f"Illustrative estimate (assumed 140 kWh): Inter-batch spindle idle rotation between machining cycles on {cnc3}.",
             "potential_saving_inr": 1180,
             "potential_saving_kwh": 140,
             "method": "physics-simulation",
             "confidence": None,
             "action": "Enforce operator SOP for spindle cut-off during part loading/unloading.",
-            "note": "Operator procedure adjustment — zero hardware investment.",
+            "note": "Illustrative estimate (assumed 140 kWh) — verify with physical machine logging before acting.",
         })
         aid += 1
 

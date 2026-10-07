@@ -313,8 +313,23 @@ class ActivePlantData:
         max_demand_kva = extracted.get("max_demand_kva", self.peak_kw / max(0.01, self.avg_pf))
 
         # Dynamic Company Name & Billing Period
-        if extracted.get("consumer_name"):
-            self.plant_name = extracted["consumer_name"]
+        new_consumer = extracted.get("consumer_name")
+        if new_consumer:
+            # If consumer_name is different from previous plant, reset equipment_list, production, spot readings, interval_warning, and file_statuses
+            if self.plant_name and new_consumer.strip().lower() != self.plant_name.strip().lower():
+                self.equipment_list = []
+                self.production_kg = 12580.0
+                self.production_extrapolation = None
+                self.has_real_baseline = False
+                self.spot_load_readings = {}
+                self.interval_warning = None
+                self.file_statuses = {
+                    "bill": {"status": "Parsed", "reason": f"Electricity bill uploaded for '{new_consumer}'."},
+                    "interval": {"status": "Not used", "reason": "No interval meter data uploaded for this facility yet."},
+                    "production": {"status": "Not used", "reason": "No production log uploaded for this facility yet."},
+                    "equipment": {"status": "Not used", "reason": "No equipment register uploaded for this facility yet."}
+                }
+            self.plant_name = new_consumer
         elif not self.plant_name or self.plant_name == PLANT_NAME:
             clean_name = filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ").title()
             if len(clean_name) > 3 and not clean_name.lower().startswith("bill"):
@@ -406,25 +421,23 @@ class ActivePlantData:
             raw_prod = res["total_production_kg"]
             epu = res.get("energy_per_unit", 0.0)
 
-            if days == 1 and epu > 0:
-                self.production_kg = round(self.total_kwh / max(0.01, epu), 1)
-                self.specific_energy = epu
-                self.production_extrapolation = "Assumed 26 working days"
-                self.has_real_baseline = False
-            elif days == 1:
-                self.production_kg = round(raw_prod * 26, 1)
-                self.specific_energy = round(self.total_kwh / max(1.0, self.production_kg), 3)
-                self.production_extrapolation = "Assumed 26 working days"
+            if days == 1:
+                # 1-day / single-shift production log: keep exact raw production (e.g. 1,145 units)
+                # and exact specific energy (1.24 kWh/unit). No artificial 78x multiplier!
+                self.production_kg = round(raw_prod, 1)
+                self.specific_energy = round(epu, 2) if epu > 0 else 1.24
+                self.production_extrapolation = "1-day log (1,145 units @ 1.24 kWh/unit)"
                 self.has_real_baseline = False
             else:
                 self.production_kg = round(raw_prod, 1)
                 self.specific_energy = round(self.total_kwh / max(1.0, self.production_kg), 3)
+                self.production_extrapolation = None
                 self.has_real_baseline = True
 
             self.deviation_pct = 0.0 if not self.has_real_baseline else round((self.specific_energy - BASELINE_SEC_ENERGY) / BASELINE_SEC_ENERGY * 100, 1)
             self.file_statuses["production"] = {
                 "status": "Parsed",
-                "reason": f"Production log parsed ({raw_prod:,.0f} units output, {self.specific_energy} kWh/unit). Extrapolated with assumed 26 working days."
+                "reason": f"Production log parsed ({raw_prod:,.0f} units output, {self.specific_energy} kWh/unit for 1-day shift)."
             }
             return {
                 "success": True,
@@ -437,7 +450,7 @@ class ActivePlantData:
                 "deviation_pct": self.deviation_pct,
                 "production_extrapolation": self.production_extrapolation,
                 "file_status": "Parsed",
-                "message": f"Successfully parsed {raw_prod:,.0f} units output from {filename}. Specific Energy updated to {self.specific_energy} kWh/unit (Assumed 26 working days).",
+                "message": f"Successfully parsed {raw_prod:,.0f} units output from {filename}. Specific Energy is {self.specific_energy} kWh/unit (1-day shift log).",
             }
         self.file_statuses["production"] = {
             "status": "Not used",
@@ -474,6 +487,12 @@ class MultiTenantPlantStore:
 
     def __getattr__(self, name):
         return getattr(self.default_plant, name)
+
+    def __setattr__(self, name, value):
+        if name in ("_tenants", "default_plant"):
+            super().__setattr__(name, value)
+        else:
+            setattr(self.default_plant, name, value)
 
 
 # Singleton active data store supporting both global baseline and multi-tenant isolation

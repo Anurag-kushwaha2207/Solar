@@ -215,7 +215,7 @@ async def receive_whatsapp_message(request: Request):
 
     # Execute Agentic Copilot
     bot_response = ask_agentic_copilot(incoming_text)
-    answer_text = bot_response.get("content", "Maaf kijiye, abhi process nahi ho paya.")
+    answer_text = bot_response.get("content", "Sorry, could not process your request at this moment. Please try again.")
     wa_formatted_text = format_for_whatsapp(answer_text)
 
     # Security rule: Outbound Meta API message is ONLY sent to senders verified from a genuine Meta Webhook payload

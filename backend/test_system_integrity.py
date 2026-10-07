@@ -330,6 +330,81 @@ def test_bill_ocr_sanity_rejection_and_confirmation():
     assert active_plant.total_kwh == 35000.0
 
 
+def test_interval_pdf_upload_and_new_plant_isolation():
+    """18. Interval PDF Upload (200 OK) & Multi-Plant Isolation: Confirms bill, ingests interval PDF, tests XYZ plant reset."""
+    import fitz
+
+    # 1. Confirm bill for ABC Manufacturing
+    r_bill = client.post("/api/ingest/confirm-bill", json={
+        "total_kwh": 18450.0,
+        "total_amount_inr": 176450.0,
+        "power_factor": 0.94,
+        "max_demand_kva": 285.0,
+        "consumer_name": "ABC Manufacturing Pvt. Ltd.",
+        "filename": "01_Electricity_Bill_Dummy.pdf"
+    })
+    assert r_bill.status_code == 200
+    assert active_plant.plant_name == "ABC Manufacturing Pvt. Ltd."
+    assert active_plant.total_kwh == 18450.0
+
+    # 2. Upload Interval PDF — must succeed with 200 OK (no 500 KeyError)
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text(
+        fitz.Point(50, 50),
+        "Consumer ID\tABC-001\n"
+        "Date\t2026-09-15\n"
+        "00:00 Load\t12.4 kW\n"
+        "06:00 Load\t18.2 kW\n"
+        "09:00 Load\t45.1 kW\n"
+        "12:00 Load\t52.3 kW\n"
+        "15:00 Load\t48.0 kW\n"
+        "18:00 Load\t65.2 kW\n"
+        "21:00 Load\t34.0 kW\n"
+        "Daily Energy\t4285 kWh\n"
+    )
+    pdf_bytes = doc.tobytes()
+    doc.close()
+
+    r_pdf = client.post(
+        "/api/ingest/upload-meter-data",
+        files={"file": ("02_Interval_Meter_Data_Dummy.pdf", pdf_bytes, "application/pdf")}
+    )
+    assert r_pdf.status_code == 200, f"Expected 200 on interval PDF upload, got {r_pdf.status_code}: {r_pdf.text}"
+    pdf_res = r_pdf.json()
+    assert pdf_res["status"] == "processed"
+    assert pdf_res["file_status"] == "Partially used"
+    # Bill remains source of truth for total monthly energy
+    assert active_plant.total_kwh == 18450.0
+
+    # 3. Multi-Plant Isolation: Ingest bill for new plant 'XYZ Plastics'
+    # Must reset equipment, production, spot readings, and CNC alerts
+    active_plant.equipment_list = [
+        {"name": "CNC Machine #1", "total_kw": 22.0, "duty_factor": 0.7},
+        {"name": "CNC Machine #2", "total_kw": 22.0, "duty_factor": 0.7},
+    ]
+    active_plant.recalculate_machine_energy()
+    assert "CNC Machine #1" in active_plant.machines
+
+    r_xyz = client.post("/api/ingest/confirm-bill", json={
+        "total_kwh": 22000.0,
+        "total_amount_inr": 195000.0,
+        "power_factor": 0.93,
+        "max_demand_kva": 210.0,
+        "consumer_name": "XYZ Plastics Ltd.",
+        "filename": "xyz_plastics_bill.pdf"
+    })
+    assert r_xyz.status_code == 200
+    assert active_plant.plant_name == "XYZ Plastics Ltd."
+    assert active_plant.equipment_list == [], "Old plant equipment was not reset!"
+    assert not any("cnc" in m.lower() for m in active_plant.machines.keys()), "Old CNC machines still attached to XYZ Plastics!"
+    assert active_plant.spot_load_readings == {}
+
+    # Verify anomaly alerts do NOT show CNC alerts for XYZ Plastics
+    alerts_xyz = client.get("/api/anomaly/alerts").json()["alerts"]
+    assert not any("cnc" in a["title"].lower() for a in alerts_xyz), "Old CNC alerts shown for XYZ Plastics!"
+
+
 def run_tests():
     """Execute all tests programmatically."""
     tests = [
@@ -350,6 +425,7 @@ def run_tests():
         ("15. Unauthenticated API Rejection (Logout 401)", test_unauthenticated_api_rejection_on_logout),
         ("16. Firebase Auth & Tenant Isolation", test_firebase_auth_user_isolation),
         ("17. Bill OCR Sanity & User Confirmation", test_bill_ocr_sanity_rejection_and_confirmation),
+        ("18. Interval PDF Upload (200 OK) & Multi-Plant Isolation", test_interval_pdf_upload_and_new_plant_isolation),
     ]
 
     print("\nRunning UrjaMind Test & Verification Suite...")

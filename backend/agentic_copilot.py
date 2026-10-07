@@ -121,7 +121,7 @@ def get_alerts() -> Dict[str, Any]:
             "severity": "medium",
             "waste_kwh": 110,
             "saving_inr_month": 920,
-            "finding": f"Standby power draw during shift handovers on {cnc1} (~110 kWh/month)",
+            "finding": f"Illustrative estimate (assumed 110 kWh): Standby power draw during shift handovers on {cnc1}",
             "action": "Configure auto-standby power saving mode in machine controller",
         })
         dyn_alerts.append({
@@ -130,7 +130,7 @@ def get_alerts() -> Dict[str, Any]:
             "severity": "low",
             "waste_kwh": 140,
             "saving_inr_month": 1180,
-            "finding": f"Inter-batch spindle idle rotation between machining cycles on {cnc3} (~140 kWh/month)",
+            "finding": f"Illustrative estimate (assumed 140 kWh): Inter-batch spindle idle rotation between machining cycles on {cnc3}",
             "action": "Enforce operator SOP for spindle cut-off during part loading/unloading",
         })
 
@@ -267,7 +267,7 @@ CLAUDE_TOOLS = [
     },
     {
         "name": "get_carbon",
-        "description": "Fetch GHG Protocol Scope 1 and Scope 2 carbon footprint, CEA grid emission factor, and verified SHA-256 cryptographic audit hash.",
+        "description": "Fetch GHG Protocol Scope 1 and Scope 2 carbon footprint, CEA grid emission factor, and SHA-256 payload hash.",
         "input_schema": {
             "type": "object",
             "properties": {},
