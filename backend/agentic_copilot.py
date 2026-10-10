@@ -533,13 +533,16 @@ def _fallback_tool_router(query: str) -> Dict[str, Any]:
 def ask_agentic_copilot(
     user_message: str,
     chat_history: Optional[List[Dict[str, str]]] = None,
+    allow_llm: bool = True,
 ) -> Dict[str, Any]:
     """
     Main copilot entry point:
-    If ANTHROPIC_API_KEY is available in environment, runs genuine Claude multi-turn tool-use.
-    Otherwise, runs deterministic tool-grounded fallback runner.
+    If allow_llm is True and ANTHROPIC_API_KEY is available in environment,
+    runs genuine Claude multi-turn tool-use.
+    Otherwise (e.g. guest evaluation sessions, tests, or missing key),
+    runs deterministic tool-grounded fallback runner at zero API cost.
     """
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    api_key = os.environ.get("ANTHROPIC_API_KEY") if allow_llm else None
     model_name = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-5-5")
 
     if api_key:

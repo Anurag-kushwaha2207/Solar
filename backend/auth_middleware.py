@@ -83,6 +83,8 @@ async def get_current_user(
             "email": "manager@rajkotfoundry.in",
             "name": "Rajkot Plant Manager",
             "source": "demo_token",
+            "is_guest": True,
+            "tier": "guest_evaluation",
         }
 
     if token.startswith("test-token-"):

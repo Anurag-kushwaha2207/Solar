@@ -66,6 +66,20 @@ async def root_webhook_post(request: Request):
     return await receive_whatsapp_message(request)
 
 
+@app.get("/")
+@app.get("/api")
+async def root():
+    return {
+        "status": "online",
+        "service": "UrjaMind Backend API",
+        "version": "1.0.0",
+        "message": "⚡ AI Energy Intelligence for Indian SMEs",
+        "docs": "/api/docs",
+        "health": "/api/health",
+        "frontend": "https://urjamind-energy.web.app"
+    }
+
+
 @app.get("/api/health")
 async def health_check():
     return {
