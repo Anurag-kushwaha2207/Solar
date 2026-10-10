@@ -249,10 +249,11 @@ def test_unauthenticated_api_rejection_on_logout():
     try:
         os.environ["ENVIRONMENT"] = "production"
 
-        # Arbitrary/attacker tokens are strictly rejected (401)
-        prod_attacker_client = TestClient(app, headers={"Authorization": "Bearer invalid-attacker-token-999"})
-        prod_att_r = prod_attacker_client.post("/api/copilot/chat", json={"message": "kpi"})
-        assert prod_att_r.status_code == 401, f"Expected 401 in production for invalid token, got {prod_att_r.status_code}"
+        # Test tokens and arbitrary tokens are strictly rejected (401) in production
+        for fake_token in ["test-token-attacker", "test-token-a1", "test-token-zz9", "invalid-token-xyz"]:
+            prod_fake_client = TestClient(app, headers={"Authorization": f"Bearer {fake_token}"})
+            fake_r = prod_fake_client.post("/api/copilot/chat", json={"message": "kpi"})
+            assert fake_r.status_code == 401, f"Expected 401 in production for {fake_token}, got {fake_r.status_code}"
 
         # Demo token is allowed for evaluation, but strictly isolated in guest mode without LLM cost
         prod_demo_client = TestClient(app, headers={"Authorization": "Bearer demo-token-urjamind-2026"})

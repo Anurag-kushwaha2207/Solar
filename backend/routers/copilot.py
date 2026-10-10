@@ -14,15 +14,17 @@ router = APIRouter()
 
 # ── 1. IP Extraction (Render Proxy & Cloudflare Aware) ──────────────────────────
 def get_client_ip(request: Request) -> str:
-    """Extract real client IP behind reverse proxies (Render, Cloudflare, Nginx)."""
+    """
+    Extract verified client IP.
+    With uvicorn --proxy-headers --forwarded-allow-ips='*' enabled,
+    uvicorn automatically parses the X-Forwarded-For header securely
+    and populates request.client.host with the true peer address.
+    """
+    if request.client and request.client.host:
+        return request.client.host
     forwarded = request.headers.get("x-forwarded-for")
     if forwarded:
         return forwarded.split(",")[0].strip()
-    real_ip = request.headers.get("x-real-ip")
-    if real_ip:
-        return real_ip.strip()
-    if request.client and request.client.host:
-        return request.client.host
     return "unknown"
 
 

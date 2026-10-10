@@ -88,6 +88,11 @@ async def get_current_user(
         }
 
     if token.startswith("test-token-"):
+        if env == "production":
+            raise HTTPException(
+                status_code=401,
+                detail="Test tokens are strictly disabled in production. Please authenticate via Firebase.",
+            )
         tenant_uid = token.replace("test-token-", "")
         return {
             "uid": tenant_uid,
