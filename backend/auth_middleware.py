@@ -55,6 +55,11 @@ async def get_current_user(
     Validates Bearer token from 'Authorization' header.
     Returns authenticated user payload containing 'uid'.
     """
+    # Public endpoints that never require authentication (e.g. browser file downloads)
+    path = request.url.path
+    if path.endswith("/template/interval-csv") or path.endswith("/file-status"):
+        return {"uid": "public", "source": "public"}
+
     env = os.environ.get("ENVIRONMENT", "development").lower()
 
     if not authorization:

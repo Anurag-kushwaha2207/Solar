@@ -283,11 +283,14 @@ export default function Upload() {
               return res
             }}
             extraContent={
-              <div className="template-box">
+              <div className="template-box" onClick={e => e.stopPropagation()}>
                 <a
                   href={getIntervalTemplateUrl()}
                   download="urjamind_interval_template_96slot.csv"
+                  target="_blank"
+                  rel="noopener noreferrer"
                   className="btn-template"
+                  onClick={e => e.stopPropagation()}
                   title="Download standard 96-slot interval CSV template"
                 >
                   📥 Download 96-slot CSV Template
