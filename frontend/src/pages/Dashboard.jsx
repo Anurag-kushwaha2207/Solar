@@ -80,7 +80,7 @@ function Copilot({ kpis }) {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [quickQs, setQuickQs] = useState([])
-  const endRef = useRef()
+  const msgsContainerRef = useRef()
 
   useEffect(() => {
     const welcome = isCustom
@@ -102,7 +102,11 @@ function Copilot({ kpis }) {
       )
   }, [])
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [msgs])
+  useEffect(() => {
+    if (msgsContainerRef.current) {
+      msgsContainerRef.current.scrollTop = msgsContainerRef.current.scrollHeight
+    }
+  }, [msgs])
 
   async function send(text) {
     if (!text.trim() || loading) return
@@ -151,14 +155,13 @@ function Copilot({ kpis }) {
           <button key={i} className="quick-q" onClick={() => send(q)}>{q}</button>
         ))}
       </div>
-      <div className="copilot-msgs">
+      <div className="copilot-msgs" ref={msgsContainerRef}>
         {msgs.map((m, i) => (
           <div key={i} className={`msg msg-${m.role}`}>
             <div className="msg-bubble">{renderContent(m.content)}</div>
           </div>
         ))}
         {loading && <div className="msg msg-bot"><div className="msg-bubble typing">⏳ Analyzing...</div></div>}
-        <div ref={endRef} />
       </div>
       <div className="copilot-input">
         <input
