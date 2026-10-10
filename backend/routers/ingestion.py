@@ -226,6 +226,7 @@ async def upload_equipment(file: UploadFile = File(...), plant_id: str = Form("1
 
 
 @router.post("/load-demo")
+@router.post("/reset")
 async def load_demo(plant_id: str = "1"):
     active_plant.reset_to_demo()
     return {
@@ -241,6 +242,39 @@ async def load_demo(plant_id: str = "1"):
         "total_kwh": SEP_TOTAL_KWH,
         "period": "Sep 2026",
         "message": "✅ Sample plant baseline loaded (48,240 kWh).",
+    }
+
+
+@router.post("/load-abc-dummy")
+async def load_abc_dummy():
+    """Instantly pre-loads the 4 dummy files for ABC Manufacturing Pvt. Ltd."""
+    active_plant.source = "uploaded_bill_ocr"
+    active_plant.filename = "01_Electricity_Bill_Dummy.pdf"
+    active_plant.plant_name = "ABC Manufacturing Pvt. Ltd."
+    active_plant.billing_period = "Sep 2026"
+    active_plant.total_kwh = 18450.0
+    active_plant.total_bill_inr = 176450.0
+    active_plant.avg_pf = 0.94
+    active_plant.pf_penalty_inr = 0.0
+    active_plant.max_demand_kva = 285.0
+    active_plant.spot_load_readings = {"observed_peak_kva": 253.3}
+    active_plant.production_kg = 1145.0
+    active_plant.specific_energy = 1.24
+    active_plant.equipment_list = [
+        {"name": "CNC Production Machine #1", "total_kw": 22.0, "qty": 1, "duty_factor": 0.65},
+        {"name": "CNC Production Machine #2", "total_kw": 22.0, "qty": 1, "duty_factor": 0.60},
+        {"name": "CNC Heavy Roughing #3", "total_kw": 30.0, "qty": 1, "duty_factor": 0.50},
+        {"name": "CNC Finishing Machine #4", "total_kw": 18.0, "qty": 1, "duty_factor": 0.45},
+    ]
+    active_plant.recalculate_machine_energy()
+    return {
+        "status": "success",
+        "mode": "abc_dummy_loaded",
+        "plant": "ABC Manufacturing Pvt. Ltd.",
+        "total_kwh": 18450.0,
+        "max_demand_kva": 285.0,
+        "observed_peak_kva": 253.3,
+        "message": "✅ ABC Manufacturing Pvt. Ltd. dummy telemetry loaded.",
     }
 
 
